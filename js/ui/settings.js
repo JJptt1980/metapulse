@@ -11,6 +11,7 @@ import { healthCard } from './health.js';
 import { omronCard } from './omron.js';
 import { dangerCard } from './reset.js';
 import { medsSettings } from './meds.js';
+import { soundSettings } from './sounds.js';
 import { WEEK_MODES } from '../ledger.js';
 
 const r1 = x => Math.round(x * 10) / 10;
@@ -227,7 +228,7 @@ function prefsCard() {
   th.onchange = () => { L.keepThumbs = th.checked; commitLocal(); drawSumP(); };
   card.append(h('label', { style: { marginTop: 0 } }, '外觀顏色'), theme,
     h('label', '字體大小'), fs,
-    h('label', '斷食按鈕'), fxBox,
+    h('label', '斷食按鈕'), fxBox, soundSettings(),
     h('label.row', { style: { color: 'var(--tx)', marginTop: '14px', fontSize: '15px' } }, th, '保存餐點小照片'),
     h('label', '存摺的計算期間'), wk,
     h('label', '太久沒備份時提醒'), bkd,

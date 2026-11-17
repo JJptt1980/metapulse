@@ -3,6 +3,7 @@
  * - gears(after)：結束斷食 → 齒輪由靜止加速轉動、合成喀啦聲，結束後執行 after
  * 設定：L.fxVisual（特效）、L.fxSound（音效）、L.fxVoice（語音），預設都開 */
 import { L } from '../state.js';
+import { playSound, hasSound, soundDuration } from '../sounds.js';
 
 const on = k => L[k] !== false;
 let styled = false;
@@ -11,18 +12,18 @@ function style() {
   const s = document.createElement('style');
   s.textContent = `
 .fx-layer{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;pointer-events:auto;overflow:hidden}
-.fx-ts{background:radial-gradient(circle at 50% 60%,rgba(255,255,255,.92),rgba(235,232,245,.88));animation:fxfade 2.4s ease forwards}
+.fx-ts{background:radial-gradient(circle at 50% 60%,rgba(255,255,255,.92),rgba(235,232,245,.88));animation:fxfade var(--d,2.4s) ease forwards}
 .fx-do{position:absolute;font:900 48px/1 "Hiragino Sans","Noto Sans JP","Yu Gothic",system-ui,sans-serif;color:#111;letter-spacing:-.08em;white-space:nowrap;
   -webkit-text-stroke:1.5px #111;text-shadow:3px 3px 0 rgba(0,0,0,.18);transform-origin:center;animation:fxpop .55s cubic-bezier(.2,1.6,.4,1) both}
 .fx-do i{display:inline-block;font-style:normal;animation:fxshake .16s linear infinite}
-.fx-gear{background:radial-gradient(circle,rgba(40,28,8,.55),rgba(0,0,0,.72));animation:fxfade 2.55s ease forwards}
+.fx-gear{background:radial-gradient(circle,rgba(40,28,8,.55),rgba(0,0,0,.72));animation:fxfade var(--d,2.55s) ease forwards}
 .fx-gear svg{width:min(88vw,380px);height:auto;filter:drop-shadow(0 6px 10px rgba(0,0,0,.5))}
 .fx-gear .spark{transform-box:fill-box;transform-origin:center;animation:fxtw 1.1s ease-in-out infinite}
 .fx-gear .spark:nth-of-type(2n){animation-delay:.35s}.fx-gear .spark:nth-of-type(3n){animation-delay:.7s}
 @keyframes fxtw{0%,100%{opacity:0;transform:scale(.3) rotate(0)}50%{opacity:1;transform:scale(1) rotate(45deg)}}
-.fx-gear .g1{transform-origin:118px 122px;animation:fxspin 2.55s cubic-bezier(.6,0,.4,1) forwards}
-.fx-gear .g2{transform-origin:276px 170px;animation:fxspinr 2.55s cubic-bezier(.6,0,.4,1) forwards}
-.fx-gear .g3{transform-origin:178px 270px;animation:fxspinr 2.55s cubic-bezier(.6,0,.4,1) forwards}
+.fx-gear .g1{transform-origin:118px 122px;animation:fxspin var(--d,2.55s) cubic-bezier(.6,0,.4,1) forwards}
+.fx-gear .g2{transform-origin:276px 170px;animation:fxspinr var(--d,2.55s) cubic-bezier(.6,0,.4,1) forwards}
+.fx-gear .g3{transform-origin:178px 270px;animation:fxspinr var(--d,2.55s) cubic-bezier(.6,0,.4,1) forwards}
 .fx-invert{filter:invert(1) hue-rotate(180deg)}
 @keyframes fxshake{0%{transform:translate(0,0)}25%{transform:translate(2px,-2px)}50%{transform:translate(-2px,1px)}75%{transform:translate(1px,2px)}100%{transform:translate(0,0)}}
 @keyframes fxpop{from{opacity:0;scale:2.4}to{opacity:1;scale:1}}
@@ -38,6 +39,7 @@ function layer(cls, html, ms, after) {
   style();
   const el = document.createElement('div');
   el.className = 'fx-layer ' + cls;
+  if (!/stop/.test(cls)) el.style.setProperty('--d', (ms / 1000) + 's');   // 動畫長度跟著顯示時間（自訂音效較長時）
   el.innerHTML = html;
   let done = false;
   const end = () => { if (done) return; done = true; el.remove(); after && after(); };
@@ -123,12 +125,13 @@ function say(text) {
 /** 結束進餐：擬聲字＋時間凍結音 → 語音「砸瓦魯多」→ 齒輪逐漸停止 */
 export function timeStop() {
   // 語音要在按下的當下開始播（手機規定要使用者按了才能出聲）；音檔開頭留了 0.45 秒空白
-  const voice = on('fxVoice') ? playVoice() : new Promise(r => setTimeout(r, 1800));
-  if (on('fxSound')) freezeSound();
+  const custom = on('fxSound') && hasSound('start') ? playSound('start') : null;
+  const voice = custom || (on('fxVoice') ? playVoice() : new Promise(r => setTimeout(r, 1800)));
+  if (on('fxSound') && !custom) freezeSound();
   if (on('fxVisual')) {
     const main = document.querySelector('main');
     if (main) { main.classList.add('fx-invert'); setTimeout(() => main.classList.remove('fx-invert'), 675); }
-    layer('fx-ts', doDoDo(), 2400);
+    layer('fx-ts', doDoDo(), custom && soundDuration('start') ? Math.min(12000, Math.max(2400, soundDuration('start') * 1000)) : 2400);
   }
   voice.then(() => gearsStop());
 }
@@ -204,7 +207,9 @@ export function gearsStop() {
 
 /** 結束斷食：齒輪由靜止加速轉動（時間重新開始） */
 export function gears(after) {
-  if (on('fxSound')) gearSound();
+  const custom = on('fxSound') && hasSound('end');
+  if (custom) playSound('end'); else if (on('fxSound')) gearSound();
   if (!on('fxVisual')) { after && after(); return; }
-  layer('fx-gear', gearSvg(), 2550, after);
+  const ms = custom && soundDuration('end') ? Math.min(12000, Math.max(2550, soundDuration('end') * 1000)) : 2550;
+  layer('fx-gear', gearSvg(), ms, after);
 }

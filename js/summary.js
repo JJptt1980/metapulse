@@ -1,7 +1,7 @@
 /* 數據摘要（純文字，給 AI 搭配圖表圖片分析）：移植同步版的摘要，另外加上飲食、斷食、運動消耗的統計（純函數） */
 import { sortEntries, onBoard, dn, fromDn } from './records.js';
 import { localDate } from './points.js';
-import { leanTrend } from './longterm.js';
+import { leanTrend, leanSummary } from './longterm.js';
 
 const f = (n, d = 1) => (+n).toFixed(d);
 const sg = n => { const r = Math.round(n * 10) / 10; return (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(r).toFixed(1); };
@@ -145,6 +145,8 @@ export function buildSummary(S, P, today, withPrompt = true) {
   const lt = leanTrend(es, S.meals, P && P.ok ? P.proteinTarget : 0, today);
   if (lt.ready) {
     L.push('- 淨體重（體重 ×（1 − 體脂率））：最近 28 天平均 ' + f(lt.cur) + ' kg（' + lt.curDays + ' 天），再前 28 天 ' + f(lt.prev) + ' kg（' + lt.prevDays + ' 天），變化 ' + sg(lt.change) + ' kg（' + sg(lt.pct) + '%）' + (lt.protein !== null ? '；同期平均每天蛋白質 ' + f(lt.protein, 0) + ' g' : '') + '。');
+    const ls = leanSummary(lt);
+    L.push('  判讀（±0.5% 以內算持平、超過 1.5% 算明顯）：' + ls.levelText + (ls.lost ? ' ' + ls.lost : ''));
   }
 
   // 飲食：只算有記錄的日子（今天還沒結束，不算進平均）

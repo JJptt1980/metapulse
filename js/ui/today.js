@@ -101,10 +101,10 @@ export function renderToday(root) {
   }
   top.append(h('button.pri.cta', { type: 'button', onclick: () => openAddMeal() }, icon('camera'), '記一餐'));
   root.append(top);
-  const lt = longTermCard();
-  if (lt) root.append(lt);
   const lc = leanCard();
   if (lc) root.append(lc);
+  const lt = longTermCard();
+  if (lt) root.append(lt);
   const dc = doseCard(true);
   if (dc) root.append(dc);
   root.append(fastingCard());

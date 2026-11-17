@@ -74,6 +74,7 @@ export const LONGTERM = {
   weightMaDays: 14, fastLossPct: 1,        // 體重 14 天移動平均，每週下降超過體重 1% → 補一句
   // 淨體重趨勢：最近 28 天平均 vs 再前 28 天平均（不看單日；阻抗式體脂每天波動大）
   leanWindow: 28, leanMinDays: 6,          // 每段至少 6 天有體重＋體脂
+  leanFlatPct: 0.5,                        // ±0.5% 以內算「幾乎持平」（比體脂機誤差還小）
   leanDropPct: 1.5,                        // 平均下降超過 1.5% 才算「明顯下滑」
   leanMinMealDays: 10,                     // 最近 28 天至少 10 天有餐點記錄，才判斷蛋白質
 };

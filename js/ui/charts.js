@@ -60,6 +60,23 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
       },
     });
   }
+  // 淨體重：每天平均（體重 ×（1 − 體脂率））＋ 28 天移動平均（往前 28 天至少 6 天有量才畫）
+  const lday = {};
+  all.filter(e => e.wt > 0 && e.fat > 0).forEach(e => { (lday[e.date] = lday[e.date] || []).push(e.wt * (1 - e.fat / 100)); });
+  const lds = Object.keys(lday).sort(), lv = d => lday[d].reduce((x, y) => x + y, 0) / lday[d].length;
+  const lshow = lds.filter(d => !cut || d >= cut);
+  if (lshow.length) {
+    const ma = lshow.map(d => { const from = fromDn(dn(d) - 27), w = lds.filter(x => x >= from && x <= d); return w.length >= 6 ? +(w.reduce((a, x) => a + lv(x), 0) / w.length).toFixed(2) : null; });
+    sp.push({
+      id: 'lean', title: '淨體重', dates: lshow, note: '淨體重＝體重 ×（1 − 體脂率）。點是每天的數值（會跳動），實線是 28 天平均，看趨勢請看實線。',
+      cfg: {
+        type: 'line', data: { labels: lshow.map(md), datasets: [
+          ln3('每天 (kg)', lshow.map(d => +lv(d).toFixed(1)), c4, { showLine: false, pointRadius: lshow.length > 80 ? 1.5 : 2.5 }),
+          ln3('28 天平均', ma, wc, { pointRadius: 0, borderWidth: 2.5 })] },
+        options: { maintainAspectRatio: false, plugins: { legend: { labels: leg().labels } }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid() } } },
+      },
+    });
+  }
   if (dsAll.length) {
     const labels = [], doses = [], ob = [], dts = [];
     const a = Math.max(dn(dsAll[0].date), cut ? dn(cut) : -1e9), b = Math.max(dn(today), dn(dsAll[dsAll.length - 1].date)) + 7;
@@ -318,8 +335,7 @@ export async function renderCharts(root) {
     d.addEventListener('toggle', draw);
     root.append(h('div.card', d));
     draw();
+    if (sp.id === 'lean') { const ls = leanStatusCard(); if (ls) root.append(ls); }
   }
   root.append(longTermStatusCard());
-  const ls = leanStatusCard();
-  if (ls) root.append(ls);
 }

@@ -68,26 +68,55 @@ export function longTermMessage(lt, wt) {
 
 /**
  * 淨體重趨勢（淨體重＝體重 ×（1 − 體脂率））：最近 28 天平均和再前 28 天平均比較，不看單日
+ * 同一批量測日也算出體重、脂肪重量的平均變化，看「減掉的重量裡脂肪佔多少」
  * 同時看最近 28 天的平均蛋白質（只算有餐點記錄的日子，不含今天）
- * @returns {{ready, cur, prev, change, pct, curDays, prevDays, protein, mealDays, falling, lowProtein, alert}}
  */
 export function leanTrend(entries, meals, proteinTarget, todayStr, cfg = LONGTERM) {
   const W = cfg.leanWindow, from1 = addDays(todayStr, -(W - 1)), from0 = addDays(todayStr, -(2 * W - 1));
   const day = {};
   for (const e of entries || []) {
     if (!(e.wt > 0 && e.fat > 0) || e.date > todayStr || e.date < from0) continue;
-    (day[e.date] = day[e.date] || []).push(e.wt * (1 - e.fat / 100));
+    (day[e.date] = day[e.date] || []).push({ wt: e.wt, lean: e.wt * (1 - e.fat / 100) });
   }
-  const cur = [], prev = [];
-  for (const d in day) { const v = day[d].reduce((a, b) => a + b, 0) / day[d].length; (d >= from1 ? cur : prev).push(v); }
   const avg = a => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+  const cur = [], prev = [];
+  for (const d in day) { const x = day[d]; (d >= from1 ? cur : prev).push({ wt: avg(x.map(y => y.wt)), lean: avg(x.map(y => y.lean)) }); }
   const ready = cur.length >= cfg.leanMinDays && prev.length >= cfg.leanMinDays;
-  const c = avg(cur), p = avg(prev);
+  const c = avg(cur.map(x => x.lean)), p = avg(prev.map(x => x.lean));
   const change = ready ? c - p : null, pct = ready ? (c - p) / p * 100 : null;
+  const wtChange = ready ? avg(cur.map(x => x.wt)) - avg(prev.map(x => x.wt)) : null;
+  const fatChange = ready ? wtChange - change : null;
+  // 減重時：淨體重佔減掉重量的比例（體重至少少了 0.3 kg 才算）
+  const lostLean = ready && wtChange <= -0.3 ? Math.max(0, Math.min(1, change / wtChange)) : null;
+  const level = !ready ? null : pct >= cfg.leanFlatPct ? 'up' : pct > -cfg.leanFlatPct ? 'flat' : pct > -cfg.leanDropPct ? 'down' : 'drop';
+  const share = lostLean === null ? null : lostLean < 0.25 ? 'good' : lostLean <= 0.5 ? 'ok' : 'high';
   const pro = {};
   for (const m of meals || []) { const d = localDate(m.at); if (d >= from1 && d < todayStr) pro[d] = (pro[d] || 0) + (+m.protein || 0); }
   const pd = Object.values(pro), protein = pd.length >= cfg.leanMinMealDays ? avg(pd) : null;
-  const falling = ready && pct <= -cfg.leanDropPct;
+  const falling = level === 'drop';
   const lowProtein = protein !== null && proteinTarget > 0 && protein < proteinTarget;
-  return { ready, cur: c, prev: p, change, pct, curDays: cur.length, prevDays: prev.length, protein, mealDays: pd.length, falling, lowProtein, alert: falling && lowProtein };
+  return { ready, cur: c, prev: p, change, pct, wtChange, fatChange, lostLean, level, share, curDays: cur.length, prevDays: prev.length, protein, mealDays: pd.length, falling, lowProtein, alert: falling && lowProtein };
+}
+
+const sgn = (x, d = 1) => (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x).toFixed(d);
+export const LEAN_LEVELS = {
+  up: { tag: '增加', tone: 'good', text: '淨體重增加：肌肉可能有長，也可能是身體水分變多。' },
+  flat: { tag: '幾乎持平', tone: 'good', text: '幾乎持平：變化比體脂機每天的誤差還小。減重時能維持住，代表肌肉大致保住了，這是好結果。' },
+  down: { tag: '小幅下降', tone: 'mid', text: '小幅下降：減重時少一點是常見的（水分、肝醣也算在淨體重裡），繼續吃夠蛋白質就好。' },
+  drop: { tag: '明顯下降', tone: 'warn', text: '明顯下降：比體脂機的誤差大，可能有掉一些肌肉。' },
+};
+export const LEAN_SHARE = {
+  good: '減掉的大多是脂肪，很好。',
+  ok: '還可以，多吃點蛋白質、做些肌力運動，可以保住更多肌肉。',
+  high: '淨體重佔的比例偏多，建議留意蛋白質和肌力運動。',
+};
+
+/** 給畫面與摘要用的白話：{ line（一行）, level, share, alert } */
+export function leanSummary(t) {
+  if (!t || !t.ready) return null;
+  const L = LEAN_LEVELS[t.level];
+  const line = '淨體重 28 天：' + sgn(t.change) + ' kg・' + L.tag + (L.tone === 'good' ? ' ✓' : '');
+  const lost = t.lostLean === null ? null
+    : '這 28 天體重平均少了 ' + Math.abs(t.wtChange).toFixed(1) + ' kg：脂肪' + (t.fatChange <= 0 ? '少 ' : '多 ') + Math.abs(t.fatChange).toFixed(1) + ' kg、淨體重' + (t.change <= 0 ? '少 ' : '多 ') + Math.abs(t.change).toFixed(1) + ' kg → 減掉的重量約 ' + Math.round((1 - t.lostLean) * 100) + '% 是脂肪。' + LEAN_SHARE[t.share];
+  return { line, levelText: L.text, tone: t.alert ? 'warn' : L.tone, lost };
 }

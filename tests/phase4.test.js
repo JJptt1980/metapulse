@@ -118,3 +118,22 @@ test('淨體重趨勢：28 天平均明顯下滑且蛋白質不足才提醒', as
   assert.equal(leanTrend(es, ms.slice(0, 5), 100, today).alert, false, '餐點記錄太少不判斷蛋白質');
   assert.equal(leanTrend(es.slice(0, 20), ms, 100, today).ready, false, '前一段資料不夠');
 });
+
+test('淨體重：-0.1 kg 算持平；減掉的重量裡脂肪佔多少', async () => {
+  const { leanTrend, leanSummary } = await import('../js/longterm.js');
+  const { addDays } = await import('../js/points.js');
+  const today = '2026-11-30', es = [];
+  for (let i = 0; i < 56; i++) {
+    const wt = i < 28 ? 103 : 105, lean = i < 28 ? 74.9 : 75.0;   // 體重 −2、淨體重 −0.1
+    es.push({ date: addDays(today, -i), wt, fat: (1 - lean / wt) * 100 });
+  }
+  const t = leanTrend(es, [], 100, today);
+  assert.equal(t.level, 'flat');
+  assert.ok(Math.abs(t.wtChange + 2) < 1e-9);
+  assert.ok(Math.abs(t.fatChange + 1.9) < 1e-9);
+  assert.equal(t.share, 'good');
+  const s = leanSummary(t);
+  assert.equal(s.line, '淨體重 28 天：−0.1 kg・幾乎持平 ✓');
+  assert.match(s.lost, /體重平均少了 2\.0 kg：脂肪少 1\.9 kg、淨體重少 0\.1 kg → 減掉的重量約 95% 是脂肪/);
+  assert.equal(s.tone, 'good');
+});

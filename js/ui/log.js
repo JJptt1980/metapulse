@@ -2,6 +2,8 @@
 import { S, L, commit, commitLocal, uid } from '../state.js';
 import { h, icon, toast, fold, pills, openSheet, closeSheet, val } from './common.js';
 import { localDate, addDays } from '../points.js';
+import { leanSummary } from '../longterm.js';
+import { leanStatus } from './fasting.js';
 import { SITES, sortEntries, onBoard, nextDose, bmi, leanMass, dn, md, wdOf, TYPES, hasValue } from '../records.js';
 
 const r1 = x => Math.round(x * 10) / 10;
@@ -108,7 +110,9 @@ function scaleCard(es) {
   }
   const lm = lastOf(es, y => y.wt > 0 && y.fat > 0);
   if (lm) more.push(stat('淨體重 · ' + md(lm.date), r1(leanMass(lm)), 'kg'));
+  const lsum = leanSummary(leanStatus());
   const body = h('div', { style: { marginTop: '10px' } }, h('div.grid3', { style: { rowGap: '12px' } }, ...more),
+    lsum ? h('div.small.num', { style: { marginTop: '8px', fontWeight: 600, color: lsum.tone === 'good' ? 'var(--ac)' : lsum.tone === 'mid' ? '#ca8a04' : 'var(--warn)' } }, lsum.line, h('span.mu.tiny', { style: { fontWeight: 400 } }, '（詳細說明在「今日」或「圖表」）')) : null,
     !S.profile.height ? h('div.mu.tiny', { style: { marginTop: '6px' } }, '在設定填身高後，可以顯示 BMI（身體質量指數）。') : null);
   return deviceCard('dev-scale', '體重計', summary, addBtn('wt', '記錄'), body);
 }

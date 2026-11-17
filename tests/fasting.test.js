@@ -93,3 +93,17 @@ test('體重下降速度（14 天平均）', () => {
   assert.equal(w.fast, true);
   assert.equal(weightTrend(es.slice(0, 3), today).weeklyPct, null);
 });
+
+test('開始時間的來源與預計結束', async () => {
+  const { fastEnd } = await import('../js/fasting.js');
+  const ms = [meal(5, 500, 50, 'gA')];
+  assert.deepEqual(currentFast(ms, [], t0).source, { type: 'meal', group: 'gA' });
+  const f = currentFast(ms, [{ id: 'f1', start: new Date(t0 - 2 * H).toISOString(), end: null }], t0);
+  assert.deepEqual(f.source, { type: 'manual', id: 'f1' });
+  const e = fastEnd(t0 - 5 * H, 16, null, t0);
+  assert.equal(e.left, 11);
+  const c = fastEnd(t0 - 5 * H, 16, { start: t0 - 5 * H, end: t0 + 3 * H }, t0);
+  assert.equal(c.left, 3);
+  assert.equal(c.custom, true);
+  assert.equal(fastEnd(t0 - 5 * H, 16, { start: 1, end: t0 }, t0).custom, false, '別次斷食的自訂結束不適用');
+});

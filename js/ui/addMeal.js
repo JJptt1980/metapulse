@@ -85,6 +85,12 @@ export function openAddMeal(o = {}) {
           try {
             const img = await shrinkImage(f);
             lastImage = img;
+            // 從相簿選的照片：用餐時間改成照片的時間（48 小時內、且不是剛拍的）
+            const lm = +f.lastModified || 0, age = Date.now() - lm;
+            if (!editing && lm && age > 120000 && age < 48 * 3600000) {
+              when = new Date(lm); whenIn.value = toLocalInput(when);
+              toast('用餐時間已改成照片的時間 ' + toLocalInput(when).slice(11));
+            }
             prev.textContent = ''; prev.append(h('img.preview', { src: img.dataUrl, alt: '餐點照片' }));
             if (L.keepThumbs) { try { thumb = (await shrinkImage(f, 200, 0.7, true)).dataUrl; } catch (e) { /* 縮圖失敗不影響 */ } }
             runAI({ image: img, text: hint.value.trim() });

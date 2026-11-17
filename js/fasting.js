@@ -21,14 +21,24 @@ export function currentFast(meals, fasts, now = Date.now()) {
   }
   const lastMeal = lastGroup ? meals.filter(m => (m.group || m.id) === lastGroup) : null;
   const f = (fasts || []).filter(x => x && x.start).reduce((a, b) => (!a || new Date(b.start) > new Date(a.start) ? b : a), null);
-  let start = lastAt, manual = false;
+  let start = lastAt, manual = false, source = lastGroup ? { type: 'meal', group: lastGroup } : null;
   if (f) {
     const fs = new Date(f.start).getTime();
-    if (!f.end && fs > lastAt && fs <= now) { start = fs; manual = true; }
-    else if (f.end) { const fe = new Date(f.end).getTime(); if (fe > start && fe <= now) start = fe; }
+    if (!f.end && fs > lastAt && fs <= now) { start = fs; manual = true; source = { type: 'manual', id: f.id }; }
+    else if (f.end) { const fe = new Date(f.end).getTime(); if (fe > start && fe <= now) { start = fe; source = { type: 'end', id: f.id }; } }
   }
-  if (!Number.isFinite(start)) return { start: null, hours: 0, manual: false, lastMeal: null };
-  return { start, hours: Math.max(0, (now - start) / H), manual, lastMeal: manual ? null : lastMeal };
+  if (!Number.isFinite(start)) return { start: null, hours: 0, manual: false, lastMeal: null, source: null };
+  return { start, hours: Math.max(0, (now - start) / H), manual, lastMeal: source.type === 'meal' ? lastMeal : null, source };
+}
+
+/**
+ * 預計結束時間：自訂的結束時間（只對同一次斷食有效）優先，否則用目標時數
+ * @returns {{end:number, left:number(小時，可為負), custom:boolean}}
+ */
+export function fastEnd(start, targetHours, customEnd, now = Date.now()) {
+  let end = start + targetHours * H, custom = false;
+  if (customEnd && customEnd.start === start && Number.isFinite(customEnd.end)) { end = customEnd.end; custom = true; }
+  return { end, left: (end - now) / H, custom };
 }
 
 /** 上一餐偏大時，階段整體往後挪幾小時（0、1、2） */

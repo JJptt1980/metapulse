@@ -19,6 +19,7 @@ export function openAddMeal(o = {}) {
     unit: m.unit, qty: m.qty, slider: m.slider, source: m.source, foodId: m.foodId, aiRaw: m.aiRaw, _id: m.id, thumb: m.thumb,
   })) : [];
   let when = editing ? new Date(editing[0].at) : new Date();
+  let whenSet = !!editing; // 沒改過時間：按「加入」的那一刻就是用餐時間
   let mode = o.mode || L.lastAddMode || 'photo';
   let thumb = editing ? (editing.find(m => m.thumb) || {}).thumb : undefined;
   let busy = null; // AbortController
@@ -37,7 +38,19 @@ export function openAddMeal(o = {}) {
     const status = h('div.small', { style: { marginTop: '8px' } });
     const itemsBox = h('div', { style: { marginTop: '12px' } });
     const whenIn = h('input', { type: 'datetime-local', value: toLocalInput(when), 'aria-label': '用餐時間' });
-    whenIn.onchange = () => { const d = new Date(whenIn.value); if (!isNaN(d)) when = d; };
+    whenIn.onchange = () => { const d = new Date(whenIn.value); if (!isNaN(d)) { when = d; whenSet = true; drawWhen(); } };
+    const whenTxt = h('b.small.num');
+    const whenBox = h('div', { style: { display: 'none', marginTop: '8px' } }, whenIn);
+    const setAgo = min => { when = new Date(Date.now() - min * 60000); whenSet = min > 0; whenIn.value = toLocalInput(when); drawWhen(); };
+    const whenRow = h('div', { style: { margin: '-4px 0 12px' } },
+      h('div.row', { style: { flexWrap: 'wrap', gap: '6px' } }, h('span.small.mu', '用餐時間'), whenTxt, h('div.grow'),
+        h('button.ghost.small', { type: 'button', style: { padding: '6px 10px' }, onclick: () => setAgo(0) }, '現在'),
+        h('button.ghost.small', { type: 'button', style: { padding: '6px 10px' }, onclick: () => setAgo(30) }, '30 分鐘前'),
+        h('button.ghost.small', { type: 'button', style: { padding: '6px 10px' }, onclick: () => setAgo(60) }, '1 小時前'),
+        h('button.ghost.small', { type: 'button', style: { padding: '6px 10px' }, onclick: () => { whenBox.style.display = whenBox.style.display === 'none' ? '' : 'none'; } }, '自訂')),
+      whenBox);
+    function drawWhen() { whenTxt.textContent = whenSet ? toLocalInput(when).replace('T', ' ').slice(5) : '現在（按加入的時間）'; }
+    drawWhen();
     const saveBtn = h('button.pri.full', { type: 'button' });
     const totalTxt = h('div.mu.small.num', { style: { textAlign: 'center', marginTop: '6px' } });
 
@@ -88,7 +101,7 @@ export function openAddMeal(o = {}) {
             // 從相簿選的照片：用餐時間改成照片的時間（48 小時內、且不是剛拍的）
             const lm = +f.lastModified || 0, age = Date.now() - lm;
             if (!editing && lm && age > 120000 && age < 48 * 3600000) {
-              when = new Date(lm); whenIn.value = toLocalInput(when);
+              when = new Date(lm); whenIn.value = toLocalInput(when); whenSet = true; drawWhen();
               toast('用餐時間已改成照片的時間 ' + toLocalInput(when).slice(11));
             }
             prev.textContent = ''; prev.append(h('img.preview', { src: img.dataUrl, alt: '餐點照片' }));
@@ -159,7 +172,7 @@ export function openAddMeal(o = {}) {
     saveBtn.onclick = () => {
       if (!items.length) return;
       const group = editing ? o.group : uid('g');
-      const at = when.toISOString();
+      const at = (whenSet ? when : new Date()).toISOString();
       if (editing) S.meals = S.meals.filter(m => m.group !== o.group);
       items.forEach((it, i) => {
         const t = itemTotals(it);
@@ -181,9 +194,9 @@ export function openAddMeal(o = {}) {
     };
 
     drawTabs();
-    sh.append(tabs, inputArea, status, itemsBox,
+    sh.append(whenRow, tabs, inputArea, status, itemsBox,
       h('button.link.small', { type: 'button', onclick: () => { items.push(blankItem()); drawItems(); itemsBox.lastChild?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }, icon('plus'), ' 自己輸入一項'),
-      h('div.foot', h('label', { style: { marginTop: 0 } }, '用餐時間'), whenIn, saveBtn, totalTxt));
+      h('div.foot', saveBtn, totalTxt));
     if (editing) {
       const del = h('button.danger.full', { type: 'button' }, icon('trash'), ' 刪除這一餐');
       del.onclick = () => {

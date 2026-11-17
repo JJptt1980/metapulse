@@ -196,15 +196,18 @@ function aiCard() {
 function prefsCard() {
   const sumEl = sumLine();
   const TN = { auto: '跟隨系統', light: '淺色', dark: '深色' };
-  const drawSumP = () => { sumEl.textContent = '外觀：' + TN[L.theme || 'auto'] + '・' + (L.keepThumbs ? '保存小照片' : '不存照片'); };
+  const drawSumP = () => { sumEl.textContent = '外觀：' + TN[L.theme || 'auto'] + '・字體' + ({ 0.9: '小', 1: '標準', 1.15: '大', 1.3: '特大' }[+L.fontScale || 1] || '標準') + '・' + (L.keepThumbs ? '保存小照片' : '不存照片'); };
   const card = h('div');
   const theme = h('select', h('option', { value: 'auto' }, '跟隨系統'), h('option', { value: 'light' }, '淺色'), h('option', { value: 'dark' }, '深色'));
   theme.value = L.theme; theme.onchange = () => { L.theme = theme.value; commitLocal(); applyTheme(); drawSumP(); };
+  const FS = [['0.9', '小'], ['1', '標準'], ['1.15', '大'], ['1.3', '特大']];
+  const fs = pills(FS, String(+L.fontScale || 1), v => { L.fontScale = +v; commitLocal(); document.documentElement.style.zoom = +v === 1 ? '' : v; drawSumP(); });
   const ask = h('input', { type: 'checkbox', checked: L.askBackup !== false });
   ask.onchange = () => { L.askBackup = ask.checked; commitLocal(); };
   const th = h('input', { type: 'checkbox', checked: !!L.keepThumbs });
   th.onchange = () => { L.keepThumbs = th.checked; commitLocal(); drawSumP(); };
   card.append(h('label', { style: { marginTop: 0 } }, '外觀顏色'), theme,
+    h('label', '字體大小'), fs,
     h('label.row', { style: { color: 'var(--tx)', marginTop: '14px', fontSize: '15px' } }, th, '保存餐點的小張照片（會占用手機空間）'),
     h('div.mu.tiny', '預設不保存照片，只保存辨識出來的食物和營養。'),
     h('label.row', { style: { color: 'var(--tx)', marginTop: '14px', fontSize: '15px' } }, ask, '修改記錄後，如果還沒連線 Google Drive，就問我要不要存檔'),

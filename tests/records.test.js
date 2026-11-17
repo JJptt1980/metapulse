@@ -98,3 +98,10 @@ test('個人資料沒變時不算新資料', () => {
   const pv2 = previewImport(p, [], { height: 170, targetWeight: 78, halfLife: 120 });
   assert.deepEqual(pv2.profile, { height: 175 });
 });
+
+test('同步版編號被重複使用：日期不同就當新記錄加入，不會蓋掉舊的', () => {
+  const ex = [{ id: 'x', sid: '1567', date: '2026-02-08', wt: 118.7, time: '09:02', sys: 0, dia: 0 }];
+  const pl = planImport([{ sid: '1567', date: '2026-11-17', wt: 105.3, time: '06:57', sys: 0, dia: 0 }], ex);
+  assert.equal(pl.add.length, 1);
+  assert.equal(pl.update.length, 0);
+});

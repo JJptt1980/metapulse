@@ -9,6 +9,15 @@ import { parseSyncBackup, previewImport, applyImport } from '../migrate.js';
 
 const ago = t => { if (!t) return ''; const m = Math.round((Date.now() - t) / 60000); return m < 1 ? '剛剛' : m < 60 ? m + ' 分鐘前' : m < 1440 ? Math.round(m / 60) + ' 小時前' : Math.round(m / 1440) + ' 天前'; };
 const fmtAt = t => new Date(t).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+/** 預覽：最近 7 天（以存檔中最新的日期往前算）每天幾筆、其中幾筆會新增 */
+function dayTable(all, add) {
+  const dates = [...new Set(all.map(e => e.date))].sort().slice(-7).reverse();
+  if (!dates.length) return null;
+  const cnt = (list, d) => list.filter(e => e.date === d).length;
+  return h('div', { style: { marginTop: '6px', borderTop: '1px solid var(--ln)', paddingTop: '6px' } },
+    h('div.tiny.mu', '存檔裡最新 7 天：'),
+    ...dates.map(d => { const n = cnt(add, d); return h('div.small.num', { style: { display: 'flex', gap: '10px' } }, h('span', { style: { width: '52px' } }, +d.slice(5, 7) + '/' + +d.slice(8)), h('span', cnt(all, d) + ' 筆'), h('span', { style: { color: n ? 'var(--ac)' : 'var(--mu)' } }, n ? '新增 ' + n : '已存在')); }));
+}
 const sub = (t, first) => h('div.small', { style: { fontWeight: 650, margin: first ? '0 0 6px' : '18px 0 6px', paddingTop: first ? 0 : '14px', borderTop: first ? 0 : '1px solid var(--ln)' } }, t);
 
 export function backupCard() {
@@ -16,7 +25,7 @@ export function backupCard() {
   const out = h('div', { style: { marginTop: '10px' } });   // 匯入預覽與結果（兩區共用）
 
   /* ---------- 同步版匯入：預覽與確認 ---------- */
-  const showSync = (parsed, source) => {
+  const showSync = (parsed, source, savedAt) => {
     out.textContent = '';
     let pv;
     try { pv = previewImport(parsed, S.entries, S.profile); } catch (e) { out.append(h('div.notice', e.message)); return; }
@@ -28,7 +37,10 @@ export function backupCard() {
       h('div.small', h('b', '同步版存檔：'), source),
       h('div.small', '共 ' + pv.total + ' 筆' + (pv.from ? '（' + pv.from + ' ～ ' + pv.to + '）' : '')),
       h('div.small', '新增 ', h('b', pv.add.length), ' 筆・更新 ', h('b', pv.update.length), ' 筆・已存在略過 ', pv.dup, ' 筆' + (pv.bad ? '・日期格式錯誤略過 ' + pv.bad + ' 筆' : '')),
-      pl.length ? h('div.small', '個人資料：' + pl.join('、')) : null));
+      pl.length ? h('div.small', '個人資料：' + pl.join('、')) : null,
+      savedAt ? h('div.small', '同步版存到 Drive 的時間：' + fmtAt(savedAt)) : null,
+      dayTable(parsed.entries, pv.add)));
+    if (savedAt && Date.now() - savedAt > 12 * 3600000) out.append(h('div.notice', '同步版的雲端存檔已經 ' + Math.round((Date.now() - savedAt) / 3600000) + ' 小時沒更新。如果同步版裡有更新的記錄，請先在同步版連線 Google Drive 按一次同步，或改用下面的「貼上存檔文字」。'));
     if (!pv.add.length && !pv.update.length && !pl.length) { out.append(h('div.notice.ok', '沒有新的資料，MetaPulse 已經是最新的。')); return; }
     const go = h('button.pri.full', { type: 'button' }, '確認匯入');
     go.onclick = () => {
@@ -54,7 +66,7 @@ export function backupCard() {
   fromDrive.onclick = async () => {
     if (!ready()) { out.textContent = ''; out.append(h('div.notice', '請先按上面的「連線 Google Drive」，登入和同步版同一個 Google 帳號，再按一次。')); return; }
     fromDrive.disabled = true; out.textContent = ''; out.append(h('div.row.small.mu', h('span.spin'), '讀取中…'));
-    try { showSync(parseSyncBackup(await readSyncBackup()), 'Google Drive'); }
+    try { const r = await readSyncBackup(); showSync(parseSyncBackup(r.data), 'Google Drive', r.modifiedTime); }
     catch (e) { out.textContent = ''; out.append(h('div.notice', e.message === 'auth' ? 'Google Drive 需要重新連線。' : '讀取失敗：' + e.message)); }
     fromDrive.disabled = false;
   };

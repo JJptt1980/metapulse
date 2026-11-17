@@ -95,7 +95,9 @@ export function planImport(incoming, existing) {
   for (const rec of incoming) {
     if (!plan.from || rec.date < plan.from) plan.from = rec.date;
     if (!plan.to || rec.date > plan.to) plan.to = rec.date;
-    const ex = rec.sid != null ? bySid.get(String(rec.sid)) : null;
+    // 同步版的編號可能被重複使用（例如復原後重新匯入），所以編號相同且日期相同才算同一筆
+    const ex0 = rec.sid != null ? bySid.get(String(rec.sid)) : null;
+    const ex = ex0 && ex0.date === rec.date ? ex0 : null;
     if (ex) {
       if (sameValues(ex, rec)) plan.dup++;
       else plan.update.push({ id: ex.id, rec });

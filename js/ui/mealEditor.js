@@ -84,7 +84,7 @@ export function itemCard(item, opts = {}) {
   body.append(
     h('label', '份量'), unitBox, conv,
     h('div.row', { style: { marginTop: '10px' } }, qtyIn, unitTag), quick,
-    h('label', '微調（0.5x～1.5x）'), slider, sliderTxt,
+    h('label', '微調（' + PORTION.sliderMin + 'x～' + PORTION.sliderMax + 'x）'), slider, sliderTxt,
     h('div.grid2', h('div', h('label', '一份約幾克'), sgIn), h('div', h('label', '一份約幾個拳頭'), fpIn)),
     h('div.mu.tiny', { style: { marginTop: '4px' } }, '一顆蛋、一杯飲料、一片吐司這類不適合用拳頭估的，拳頭留空即可。'),
     h('label', { style: { marginTop: '14px' } }, '一份的營養素'), nutGrid, totalsTxt,

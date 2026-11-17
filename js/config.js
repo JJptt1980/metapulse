@@ -32,5 +32,5 @@ export const ACTIVITY_LEVELS = [
 /** 份量 */
 export const PORTION = {
   quick: [0.5, 1, 1.5, 2],
-  sliderMin: 0.5, sliderMax: 1.5, sliderStep: 0.05,
+  sliderMin: 0.1, sliderMax: 1.5, sliderStep: 0.05,
 };

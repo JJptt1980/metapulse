@@ -7,6 +7,7 @@ const f = (n, d = 1) => (+n).toFixed(d);
 const sg = n => { const r = Math.round(n * 10) / 10; return (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(r).toFixed(1); };
 const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
 const H = 3600000;
+export const MAX_FAST_H = 48;
 
 /** 每天的飲食合計：{ 'YYYY-MM-DD': {points,kcal,protein,carb,fat,fiber,meals} } */
 export function dailyFood(meals) {
@@ -26,6 +27,13 @@ export function dailyFood(meals) {
  * @returns { 'YYYY-MM-DD': 小時 }
  */
 export function dailyFast(meals, fasts) {
+  const d = dailyFastDetail(meals, fasts), o = {};
+  for (const k in d) o[k] = d[k].hours;
+  return o;
+}
+
+/** 同 dailyFast，另外附上那段斷食的開始、結束時間：{ 'YYYY-MM-DD': {hours, start, end} } */
+export function dailyFastDetail(meals, fasts) {
   const g = new Map();
   for (const m of meals || []) {
     const k = m.group || m.id, t = new Date(m.at).getTime();
@@ -42,9 +50,9 @@ export function dailyFast(meals, fasts) {
       if (x.e && x.e > s && x.e < e) e = x.e;
     }
     const hrs = (e - s) / H;
-    if (hrs <= 0) continue;
+    if (hrs <= 0 || hrs > MAX_FAST_H) continue;   // 超過 48 小時多半是漏記餐點，不算斷食
     const d = localDate(new Date(e));
-    if (!(out[d] >= hrs)) out[d] = hrs;
+    if (!out[d] || out[d].hours < hrs) out[d] = { hours: hrs, start: s, end: e };
   }
   return out;
 }
@@ -176,7 +184,7 @@ export function buildSummary(S, P, today, withPrompt = true) {
     const x7 = fk.filter(d => dn(d) >= T - 6).map(d => fast[d]), x30 = fk.map(d => fast[d]);
     if (x7.length) L.push('- 近 7 天：' + x7.length + ' 天有資料，平均 ' + f(avg(x7)) + ' 小時。');
     L.push('- 近 30 天：' + x30.length + ' 天有資料，平均 ' + f(avg(x30)) + ' 小時，最長 ' + f(Math.max(...x30)) + ' 小時；16 小時以上 ' + x30.filter(v => v >= 16).length + ' 天、20 小時以上 ' + x30.filter(v => v >= 20).length + ' 天。');
-    L.push('- 依餐點記錄的時間推算；漏記一餐時，斷食時間會被高估。');
+    L.push('- 依餐點記錄的時間推算；漏記一餐時，斷食時間會被高估（兩餐相隔超過 48 小時視為漏記，不計入）。');
   }
 
   const ak = Object.keys(act).filter(d => dn(d) >= T - 30 && d < today);

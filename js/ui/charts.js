@@ -2,11 +2,13 @@
  * Chart.js 4.4.1 在第一次開啟圖表頁時才從 cdnjs 載入。圖表卡片可收合，收起來的不畫。 */
 import { S, L, commitLocal, plan } from '../state.js';
 import { h, fold, pills, toast, tip } from './common.js';
-import { buildSummary } from '../summary.js';
+import { buildSummary, dailyFood, dailyFastDetail } from '../summary.js';
+import { FASTING } from '../config.js';
 import { capPlugin } from '../health.js';
 import { localDate } from '../points.js';
 import { sortEntries, onBoard, dn, fromDn, md, wdOf } from '../records.js';
-import { longTermStatusCard, leanParts } from './fasting.js';
+import { longTermStatusCard, leanParts, longTermStatus, leanStatus } from './fasting.js';
+import { leanSummary } from '../longterm.js';
 
 const CHART_URL = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
 let loading = null;
@@ -49,13 +51,19 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
   const grid = () => ({ color: ln }), tk = () => ({ maxTicksLimit: 7 });
   const leg = () => ({ labels: { color: tx, boxWidth: 12 } });
   const ln3 = (label, data, color, extra) => Object.assign({ label, data, borderColor: color, backgroundColor: color, tension: 0.25, pointRadius: data.length > 80 ? 1.5 : 3, spanGaps: true }, extra || {});
+  // 橫軸照實際天數排：從第一天到最後一天每天一格，沒量的日子留空（線直接連過去）
+  const span = ds0 => { if (!ds0.length) return []; const o = []; for (let i = dn(ds0[0]); i <= dn(ds0[ds0.length - 1]); i++) o.push(fromDn(i)); return o; };
+  const dayAvg = (list, f) => { const m = {}; list.forEach(e => { const v = f(e); if (v > 0) (m[e.date] = m[e.date] || []).push(v); }); const o = {}; for (const k in m) o[k] = m[k].reduce((a, b) => a + b, 0) / m[k].length; return o; };
+  const on = (map, axis, d = 1) => axis.map(x => (map[x] != null ? +map[x].toFixed(d) : null));
+  const NONE = ['這天沒有量'];
   const sp = [];
-  if (ws.length) {
+  const wd = dayAvg(ws, e => e.wt), wAxis = span(Object.keys(wd).sort()), m2 = H ? (H / 100) ** 2 : 0;
+  if (wAxis.length) {
     sp.push({
-      id: 'w', title: '體重', dates: ws.map(e => e.date),
-      extra: i => { const x = []; if (H) x.push('BMI ' + (ws[i].wt / ((H / 100) ** 2)).toFixed(1)); if (ws[i].time) x.push('時間 ' + ws[i].time); return x; },
+      id: 'w', title: '體重', dates: wAxis,
+      extra: i => { const d = wAxis[i]; if (wd[d] == null) return NONE; const x = []; if (H) x.push('BMI ' + (wd[d] / m2).toFixed(1)); const ts = ws.filter(e => e.date === d && e.time).map(e => e.time); if (ts.length) x.push('時間 ' + ts.join('、')); return x; },
       cfg: {
-        type: 'line', data: { labels: ws.map(e => md(e.date)), datasets: [ln3('體重 (kg)', ws.map(e => e.wt), wc)].concat(TW ? [{ label: '目標 ' + TW + ' kg', data: ws.map(() => TW), borderColor: mu, backgroundColor: mu, borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0 }] : []) },
+        type: 'line', data: { labels: wAxis.map(md), datasets: [ln3('體重 (kg)', on(wd, wAxis), wc)].concat(TW ? [{ label: '目標 ' + TW + ' kg', data: wAxis.map(() => TW), borderColor: mu, backgroundColor: mu, borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0 }] : []) },
         options: { maintainAspectRatio: false, plugins: { legend: { display: TW > 0, labels: leg().labels } }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid() } } },
       },
     });
@@ -64,17 +72,51 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
   const lday = {};
   all.filter(e => e.wt > 0 && e.fat > 0).forEach(e => { (lday[e.date] = lday[e.date] || []).push(e.wt * (1 - e.fat / 100)); });
   const lds = Object.keys(lday).sort(), lv = d => lday[d].reduce((x, y) => x + y, 0) / lday[d].length;
-  const lshow = lds.filter(d => !cut || d >= cut);
-  if (lshow.length) {
-    const ma = lshow.map(d => { const from = fromDn(dn(d) - 27), w = lds.filter(x => x >= from && x <= d); return w.length >= 6 ? +(w.reduce((a, x) => a + lv(x), 0) / w.length).toFixed(2) : null; });
+  const lAxis = span(lds.filter(d => !cut || d >= cut));
+  if (lAxis.length) {
+    const ma = lAxis.map(d => { const from = fromDn(dn(d) - 27), w = lds.filter(x => x >= from && x <= d); return w.length >= 6 ? +(w.reduce((a, x) => a + lv(x), 0) / w.length).toFixed(2) : null; });
     sp.push({
-      id: 'lean', title: '淨體重', dates: lshow, note: '淨體重＝體重 ×（1 − 體脂率）。點是每天的數值（會跳動），實線是 28 天平均，看趨勢請看實線。',
+      id: 'lean', title: '淨體重', dates: lAxis, note: '淨體重＝體重 ×（1 − 體脂率）。點是每天的數值（會跳動），實線是 28 天平均，看趨勢請看實線。',
       cfg: {
-        type: 'line', data: { labels: lshow.map(md), datasets: [
-          ln3('每天 (kg)', lshow.map(d => +lv(d).toFixed(1)), c4, { showLine: false, pointRadius: lshow.length > 80 ? 1.5 : 2.5 }),
+        type: 'line', data: { labels: lAxis.map(md), datasets: [
+          ln3('每天 (kg)', lAxis.map(d => (lday[d] ? +lv(d).toFixed(1) : null)), c4, { showLine: false, pointRadius: lAxis.length > 80 ? 1.5 : 2.5 }),
           ln3('28 天平均', ma, wc, { pointRadius: 0, borderWidth: 2.5 })] },
         options: { maintainAspectRatio: false, plugins: { legend: { labels: leg().labels } }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid() } } },
       },
+    });
+  }
+  // 斷食時間：每天結束的最長一段斷食（兩餐之間；按過結束進餐／結束斷食就用那個時間）
+  const fdet = dailyFastDetail(S.meals, S.fasts);
+  const fAxis = span(Object.keys(fdet).filter(d => (!cut || d >= cut) && d <= today).sort());
+  if (fAxis.length) {
+    const P = S.prefs || {}, mode = P.fastMode || 'PURE_DYNAMIC';
+    const tgt = mode === 'STRICT_MANUAL' ? FASTING.plans[P.strictPlan || '16:8'] : mode === 'HYBRID_GUIDED' ? 16 : (+P.fastTarget || FASTING.freeTargetDefault);
+    const hrs = fAxis.map(d => (fdet[d] ? +fdet[d].hours.toFixed(1) : null));
+    const last7 = fAxis.filter(d => d >= fromDn(dn(today) - 6) && fdet[d]).map(d => fdet[d].hours);
+    const hmOf = t => { const x = new Date(t); return md(localDate(x)) + ' ' + String(x.getHours()).padStart(2, '0') + ':' + String(x.getMinutes()).padStart(2, '0'); };
+    sp.push({
+      id: 'fast', title: '斷食時間', dates: fAxis,
+      sub: last7.length ? '近 7 天平均 ' + (last7.reduce((a, b) => a + b, 0) / last7.length).toFixed(1) + ' 小時・達標 ' + last7.filter(x => x >= tgt).length + '/' + last7.length + ' 天' : '近 7 天沒有資料',
+      note: '每天一根：那天結束的最長一段斷食（兩餐之間）。按過「結束進餐」就從按的時間算，按過「結束斷食」就算到按的時間。漏記一餐時會高估；兩餐相隔超過 48 小時當作漏記，不畫。虛線是目標 ' + tgt + ' 小時，達標的長條用主色。',
+      extra: i => { const x = fdet[fAxis[i]]; return x ? [hmOf(x.start) + ' → ' + hmOf(x.end)] : ['這天沒有資料']; },
+      cfg: {
+        data: { labels: fAxis.map(md), datasets: [
+          { type: 'bar', label: '斷食（小時）', data: hrs, backgroundColor: hrs.map(v => (v >= tgt ? wc : mu)), order: 2 },
+          { type: 'line', label: '目標 ' + tgt + ' 小時', data: fAxis.map(() => tgt), borderColor: rc, backgroundColor: rc, borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0, order: 1 }] },
+        options: { maintainAspectRatio: false, plugins: { legend: leg() }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid(), beginAtZero: true } } },
+      },
+    });
+  }
+  // 每日飲食（只放在截圖）：點數＋保底虛線，蛋白質用右邊的軸；今天還沒結束不畫
+  const food = dailyFood(S.meals), Pn = plan();
+  const foodAxis = span(Object.keys(food).filter(d => (!cut || d >= cut) && d < today).sort());
+  if (foodAxis.length) {
+    const fds = [{ type: 'bar', label: '點數', data: foodAxis.map(d => (food[d] ? +food[d].points.toFixed(1) : null)), backgroundColor: wc, order: 3, yAxisID: 'y' },
+      { type: 'line', label: '蛋白質 (g)', data: foodAxis.map(d => (food[d] ? Math.round(food[d].protein) : null)), borderColor: c3, backgroundColor: c3, pointRadius: 2, spanGaps: true, tension: 0.25, order: 1, yAxisID: 'y1' }];
+    if (Pn.ok) fds.push({ type: 'line', label: '保底 ' + Pn.floorPoints + ' 點', data: foodAxis.map(() => Pn.floorPoints), borderColor: mu, backgroundColor: mu, borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0, order: 2, yAxisID: 'y' });
+    sp.push({
+      id: 'food', title: '每日飲食', dates: foodAxis, exportOnly: true,
+      cfg: { data: { labels: foodAxis.map(md), datasets: fds }, options: { maintainAspectRatio: false, plugins: { legend: leg() }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid(), beginAtZero: true, position: 'left' }, y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } } } } },
     });
   }
   if (dsAll.length) {
@@ -96,8 +138,8 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
   }
   if (bs.length) {
     const days = {}; bs.forEach(e => { (days[e.date] = days[e.date] || []).push(e); });
-    const dl = Object.keys(days).sort();
-    const av = (a, f) => { const v = a.map(f).filter(x => x > 0); return v.length ? Math.round(v.reduce((p, q) => p + q, 0) / v.length) : null; };
+    const dl = span(Object.keys(days).sort());
+    const av = (a, f) => { const v = (a || []).map(f).filter(x => x > 0); return v.length ? Math.round(v.reduce((p, q) => p + q, 0) / v.length) : null; };
     const rg = (a, f) => { const v = a.map(f).filter(x => x > 0); return v.length ? Math.min(...v) + '–' + Math.max(...v) : ''; };
     const timed = bs.filter(e => e.time).length;
     const mode = bpv === 'ampm' && timed === 0 ? 'day' : bpv;
@@ -108,18 +150,18 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
       sp.push({
         id: 'bp', title: '血壓與脈搏', dates: dl,
         note: bpv === 'ampm' ? '這段範圍內的血壓記錄都沒有量測時間，無法分早晚，已改為每日平均。' : '同一天量好幾次會取平均；手指按在圖上可以看當天量了幾次、最高最低。',
-        extra: i => { const a = days[dl[i]], x = [a.length + ' 次量測']; if (a.length > 1) x.push('收縮壓 ' + rg(a, e => e.sys) + '，舒張壓 ' + rg(a, e => e.dia)); return x; },
+        extra: i => { const a = days[dl[i]]; if (!a) return NONE; const x = [a.length + ' 次量測']; if (a.length > 1) x.push('收縮壓 ' + rg(a, e => e.sys) + '，舒張壓 ' + rg(a, e => e.dia)); return x; },
         cfg: { type: 'line', data: { labels: dl.map(md), datasets: d3 }, options: opt },
       });
     } else if (mode === 'ampm') {
-      const part = (d, am) => days[d].filter(e => e.time && ((parseInt(e.time, 10) < 12) === am));
+      const part = (d, am) => (days[d] || []).filter(e => e.time && ((parseInt(e.time, 10) < 12) === am));
       const mk2 = (lab, am, f, color, dash) => ln3(lab, dl.map(d => av(part(d, am), f)), color, { borderDash: dash || [], pointRadius: 3 });
       const d3 = [mk2('早上 收縮壓', true, e => e.sys, c3), mk2('早上 舒張壓', true, e => e.dia, c4), mk2('晚上 收縮壓', false, e => e.sys, c3, [5, 3]), mk2('晚上 舒張壓', false, e => e.dia, c4, [5, 3])];
       const nt = bs.length - timed;
       sp.push({
         id: 'bp', title: '血壓與脈搏', dates: dl,
         note: '早上＝12:00 前量測，晚上＝12:00 後；實線為早上、虛線為晚上，同時段多次量測取平均。' + (nt ? '有 ' + nt + ' 筆沒有量測時間，未納入此圖。' : ''),
-        extra: i => { const x = []; [['早上', true], ['晚上', false]].forEach(([n, am]) => { const a = part(dl[i], am); if (a.length) x.push(n + ' ' + a.length + ' 次'); }); return x; },
+        extra: i => { if (!days[dl[i]]) return NONE; const x = []; [['早上', true], ['晚上', false]].forEach(([n, am]) => { const a = part(dl[i], am); if (a.length) x.push(n + ' ' + a.length + ' 次'); }); return x; },
         cfg: { type: 'line', data: { labels: dl.map(md), datasets: d3 }, options: opt },
       });
     } else {
@@ -132,39 +174,40 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
       });
     }
   }
-  if (H && ws.length) {
-    const m2 = (H / 100) ** 2;
+  if (H && wAxis.length) {
     sp.push({
-      id: 'bmi', title: 'BMI', dates: ws.map(e => e.date), note: '依身高 ' + H + ' cm 計算。BMI＝體重 ÷ 身高²（公尺）。虛線是台灣成人標準：24 以上過重、27 以上肥胖。',
-      extra: i => ['體重 ' + ws[i].wt + ' kg'],
+      id: 'bmi', title: 'BMI', dates: wAxis, note: '依身高 ' + H + ' cm 計算。BMI＝體重 ÷ 身高²（公尺）。虛線是台灣成人標準：24 以上過重、27 以上肥胖。',
+      extra: i => (wd[wAxis[i]] != null ? ['體重 ' + wd[wAxis[i]].toFixed(1) + ' kg'] : NONE),
       cfg: {
-        type: 'line', data: { labels: ws.map(e => md(e.date)), datasets: [
-          ln3('BMI', ws.map(e => +(e.wt / m2).toFixed(1)), wc),
-          { label: '過重 24', data: ws.map(() => 24), borderColor: mu, backgroundColor: mu, borderDash: [6, 4], borderWidth: 1, pointRadius: 0 },
-          { label: '肥胖 27', data: ws.map(() => 27), borderColor: mu, backgroundColor: mu, borderDash: [2, 3], borderWidth: 1, pointRadius: 0 }] },
+        type: 'line', data: { labels: wAxis.map(md), datasets: [
+          ln3('BMI', wAxis.map(d => (wd[d] != null ? +(wd[d] / m2).toFixed(1) : null)), wc),
+          { label: '過重 24', data: wAxis.map(() => 24), borderColor: mu, backgroundColor: mu, borderDash: [6, 4], borderWidth: 1, pointRadius: 0 },
+          { label: '肥胖 27', data: wAxis.map(() => 27), borderColor: mu, backgroundColor: mu, borderDash: [2, 3], borderWidth: 1, pointRadius: 0 }] },
         options: { maintainAspectRatio: false, plugins: { legend: leg() }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid() } } },
       },
     });
   }
   if (bc.length) {
     const hf = bc.some(e => e.fat > 0), hm = bc.some(e => e.mus > 0), hv = bc.some(e => e.vis > 0);
+    const F = dayAvg(bc, e => e.fat), M = dayAvg(bc, e => e.mus), V = dayAvg(bc, e => e.vis), ax = span([...new Set(bc.map(e => e.date))].sort());
     const dsb = [];
-    if (hf) dsb.push(ln3('體脂率 (%)', bc.map(e => e.fat > 0 ? e.fat : null), c3, { yAxisID: 'y' }));
-    if (hm) dsb.push(ln3('骨骼肌率 (%)', bc.map(e => e.mus > 0 ? e.mus : null), c4, { yAxisID: 'y' }));
-    if (hv) dsb.push(ln3('內臟脂肪等級', bc.map(e => e.vis > 0 ? e.vis : null), rc, { yAxisID: 'y1' }));
+    if (hf) dsb.push(ln3('體脂率 (%)', on(F, ax), c3, { yAxisID: 'y' }));
+    if (hm) dsb.push(ln3('骨骼肌率 (%)', on(M, ax), c4, { yAxisID: 'y' }));
+    if (hv) dsb.push(ln3('內臟脂肪等級', on(V, ax), rc, { yAxisID: 'y1' }));
     sp.push({
-      id: 'bc', title: '體脂、骨骼肌與內臟脂肪', dates: bc.map(e => e.date),
-      cfg: { type: 'line', data: { labels: bc.map(e => md(e.date)), datasets: dsb }, options: { maintainAspectRatio: false, plugins: { legend: leg() }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid(), display: hf || hm, position: 'left' }, y1: { display: hv, position: 'right', grid: { drawOnChartArea: false } } } } },
+      id: 'bc', title: '體脂、骨骼肌與內臟脂肪', dates: ax,
+      cfg: { type: 'line', data: { labels: ax.map(md), datasets: dsb }, options: { maintainAspectRatio: false, plugins: { legend: leg() }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid(), display: hf || hm, position: 'left' }, y1: { display: hv, position: 'right', grid: { drawOnChartArea: false } } } } },
     });
   }
   if (bm.length) {
     const hg = bm.some(e => e.bage > 0), hr = bm.some(e => e.bmr > 0);
+    const G = dayAvg(bm, e => e.bage), R = dayAvg(bm, e => e.bmr), ax = span([...new Set(bm.map(e => e.date))].sort());
     const d2 = [];
-    if (hg) d2.push(ln3('身體年齡（歲）', bm.map(e => e.bage > 0 ? e.bage : null), c3, { yAxisID: 'y' }));
-    if (hr) d2.push(ln3('基礎代謝 (大卡)', bm.map(e => e.bmr > 0 ? e.bmr : null), c4, { yAxisID: 'y1' }));
+    if (hg) d2.push(ln3('身體年齡（歲）', on(G, ax, 0), c3, { yAxisID: 'y' }));
+    if (hr) d2.push(ln3('基礎代謝 (大卡)', on(R, ax, 0), c4, { yAxisID: 'y1' }));
     sp.push({
-      id: 'bm', title: '身體年齡與基礎代謝', dates: bm.map(e => e.date),
-      cfg: { type: 'line', data: { labels: bm.map(e => md(e.date)), datasets: d2 }, options: { maintainAspectRatio: false, plugins: { legend: leg() }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid(), display: hg, position: 'left' }, y1: { display: hr, position: 'right', grid: { drawOnChartArea: false } } } } },
+      id: 'bm', title: '身體年齡與基礎代謝', dates: ax,
+      cfg: { type: 'line', data: { labels: ax.map(md), datasets: d2 }, options: { maintainAspectRatio: false, plugins: { legend: leg() }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid(), display: hg, position: 'left' }, y1: { display: hr, position: 'right', grid: { drawOnChartArea: false } } } } },
     });
   }
   return sp;
@@ -193,7 +236,15 @@ async function exportCharts(range, bpv) {
   const specs = chartSpecs(LIGHT, range, bpv);
   if (!specs.length) throw new Error('目前沒有可以畫的圖表。');
   const font = '"Noto Sans TC",system-ui,sans-serif';
-  const cols = Math.min(2, specs.length), rows = Math.ceil(specs.length / cols);
+  // 最後一格放文字摘要（長期攝取指數、淨體重、斷食），兩欄剛好排滿
+  const lts = longTermStatus(), lsm = leanSummary(leanStatus()), fsp = specs.find(x => x.id === 'fast');
+  const notes = [];
+  if (lts.lt.ready) notes.push('長期攝取指數 ' + lts.lt.index.toFixed(2) + '（1.0＝平均每天吃到基礎代謝的量）：' + (lts.msg || '正常範圍') + '。');
+  else notes.push('長期攝取指數：資料累積中（有效記錄 ' + lts.lt.validDays + '／21 天）。');
+  if (lsm) { notes.push(lsm.line + '。' + lsm.levelText); if (lsm.lost) notes.push(lsm.lost); }
+  if (fsp && fsp.sub) notes.push('斷食：' + fsp.sub + '。');
+  const slots = specs.length + 1;
+  const cols = 2, rows = Math.ceil(slots / cols);
   const CW = 1100, CH = 520, PAD = 40, HEAD = 170, TIT = 64;
   const W = cols * CW + (cols + 1) * PAD, H = HEAD + rows * (TIT + CH + PAD);
   const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
@@ -216,6 +267,7 @@ async function exportCharts(range, bpv) {
     specs.forEach((sp, i) => {
       const x = PAD + (i % cols) * (CW + PAD), y = HEAD + Math.floor(i / cols) * (TIT + CH + PAD);
       g.fillStyle = LIGHT.tx; g.font = 'bold 32px ' + font; g.fillText(sp.title, x, y + 36);
+      if (sp.sub) { const tw = g.measureText(sp.title).width; g.fillStyle = LIGHT.mu; g.font = '26px ' + font; g.fillText('　' + sp.sub, x + tw, y + 36); }
       try {
         const oc = document.createElement('canvas'); oc.width = CW; oc.height = CH;
         Object.assign(sp.cfg.options, { responsive: false, animation: false, devicePixelRatio: 1, maintainAspectRatio: false });
@@ -224,9 +276,28 @@ async function exportCharts(range, bpv) {
       } catch (e) { g.fillStyle = '#b91c1c'; g.font = '28px ' + font; g.fillText('這張圖產生失敗', x, y + TIT + 44); }
     });
   } finally { Chart.defaults.color = prev.color; Chart.defaults.font.size = prev.size; }
+  drawNotes(g, notes, specs.length, { cols, CW, CH, PAD, HEAD, TIT, font });
   const blob = await new Promise(res => { try { cv.toBlob(res, 'image/png'); } catch (e) { res(null); } });
   if (!blob) throw new Error('圖片太大，這個瀏覽器做不出來。可以把範圍改成「近 30 天」再試。');
   return { blob, W, H };
+}
+
+/** 截圖最後一格：文字摘要（自動換行） */
+function drawNotes(g, notes, i, o) {
+  const x = o.PAD + (i % o.cols) * (o.CW + o.PAD), y = o.HEAD + Math.floor(i / o.cols) * (o.TIT + o.CH + o.PAD);
+  g.fillStyle = LIGHT.tx; g.font = 'bold 32px ' + o.font; g.fillText('文字摘要', x, y + 36);
+  g.fillStyle = '#f3f6f4'; g.fillRect(x, y + o.TIT, o.CW, o.CH);
+  g.fillStyle = LIGHT.tx; g.font = '28px ' + o.font;
+  let ty = y + o.TIT + 52;
+  for (const t of notes) {
+    let line = '';
+    for (const ch of t) {
+      if (g.measureText(line + ch).width > o.CW - 60) { g.fillText(line, x + 30, ty); ty += 42; line = ch; } else line += ch;
+    }
+    if (line) { g.fillText(line, x + 30, ty); ty += 42; }
+    ty += 18;
+  }
+  g.fillStyle = LIGHT.mu; g.font = '24px ' + o.font; g.fillText('以上是估計與趨勢，不是診斷。', x + 30, y + o.TIT + o.CH - 30);
 }
 
 const fileName = () => 'metapulse-charts-' + localDate(new Date()) + '.png';
@@ -320,6 +391,7 @@ export async function renderCharts(root) {
   Chart.defaults.color = pal.mu;
   Chart.defaults.font.family = 'system-ui,-apple-system,"Noto Sans TC",sans-serif';
   for (const sp of chartSpecs(pal, range, bpv)) {
+    if (sp.exportOnly) continue;
     addHover(sp, pal);
     const cv = h('canvas', { style: { touchAction: 'pan-y' } });
     const body = [];
@@ -328,6 +400,7 @@ export async function renderCharts(root) {
     if (sp.note) body.push(tip(sp.note));
     let head = h('h2', { style: { margin: 0 } }, sp.title);
     if (sp.id === 'lean') { const lp = leanParts(); head = h('div.grow', head, lp.sum); body.push(h('div', { style: { marginTop: '10px' } }, lp.body)); }
+    else if (sp.sub) head = h('div.grow', head, h('div.mu.small.one', { style: { marginTop: '2px' } }, sp.sub));
     const d = fold('chart-' + sp.id, head, body, { open: !!OPEN_DEFAULT[sp.id] });
     let chart = null;
     const draw = () => {

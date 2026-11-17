@@ -137,3 +137,10 @@ test('淨體重：-0.1 kg 算持平；減掉的重量裡脂肪佔多少', async 
   assert.match(s.lost, /體重平均少了 2\.0 kg：脂肪少 1\.9 kg、淨體重少 0\.1 kg → 減掉的重量約 95% 是脂肪/);
   assert.equal(s.tone, 'good');
 });
+
+test('兩餐相隔超過 48 小時視為漏記，不算斷食', () => {
+  const meals = [{ id: '1', at: at('2026-11-01', 19) }, { id: '2', at: at('2026-11-10', 12) }, { id: '3', at: at('2026-11-11', 8) }];
+  const r = dailyFast(meals, []);
+  assert.equal(r['2026-11-10'], undefined);
+  assert.equal(r['2026-11-11'], 20);
+});

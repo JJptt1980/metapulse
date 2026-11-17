@@ -132,7 +132,7 @@ export function fastInfo(now = Date.now()) {
   const tg = targetOf(mode, f, now), win = tg.win || null, ov = f.override;
   const e = fastEnd(f.start, tg.hours, ov, now);
   const fasting = !!((ov && Number.isFinite(ov.start)) || f.manual || (win ? !win.inWindow : f.hours >= FASTING.fastingFromHours));
-  return { fasting, reached: e.left <= 0, hours: f.hours, left: e.left };
+  return { fasting, reached: e.left <= 0, hours: f.hours, left: e.left, start: f.start, end: e.end, shift: mealShift(f.lastMeal) };
 }
 
 export function fastingCard() {

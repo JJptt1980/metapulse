@@ -128,3 +128,29 @@ export function eatingWindow(plan, windowStart, now = Date.now(), cfg = FASTING)
 export const hm = t => { const d = new Date(t); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
 export const dur = hours => { const h = Math.floor(hours), m = Math.floor((hours - h) * 60); return h + ' 小時 ' + pad(m) + ' 分'; };
 export { dnLocal };
+
+/** 時間是否落在勿擾時段（例如 23:00～07:00，可跨午夜） */
+export function inQuiet(t, qs = '23:00', qe = '07:00') {
+  const d = new Date(t), m = d.getHours() * 60 + d.getMinutes();
+  const a = +qs.slice(0, 2) * 60 + +qs.slice(3), b = +qe.slice(0, 2) * 60 + +qe.slice(3);
+  return a === b ? false : a < b ? m >= a && m < b : m >= a || m < b;
+}
+
+/**
+ * 斷食通知的時間點（純函數）
+ * @param fi {start, end, shift}：這次斷食的開始、預計結束、階段往後挪幾小時
+ * @param freq 'hourly'（每小時）| 'phase'（階段轉換＋達標）| 'off'
+ * @returns [{at, kind:'stage'|'done'|'hour', hours, index}]，只留未來 36 小時內、不在勿擾時段的
+ */
+export function fastNotes(fi, now, freq = 'phase', qs = '23:00', qe = '07:00', cfg = FASTING) {
+  if (!fi || !fi.start || freq === 'off') return [];
+  const H = 3600000, out = [], until = now + 36 * H;
+  const starts = stageStarts(fi.shift || 0, cfg);
+  if (freq === 'hourly') {
+    for (let h = Math.ceil((now - fi.start) / H); h <= 30; h++) { const at = fi.start + h * H; if (h >= 1) out.push({ at, kind: 'hour', hours: h }); }
+  } else {
+    starts.forEach((s, i) => { if (i > 0) out.push({ at: fi.start + s * H, kind: 'stage', hours: s, index: i }); });
+  }
+  if (fi.end > fi.start) out.push({ at: fi.end, kind: 'done', hours: (fi.end - fi.start) / H });
+  return out.filter(x => x.at > now + 30000 && x.at <= until && !inQuiet(x.at, qs, qe)).sort((a, b) => a.at - b.at);
+}

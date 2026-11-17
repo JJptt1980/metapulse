@@ -1,13 +1,18 @@
 /* 手機通知（只在 Maple app 裡有；網頁版只顯示卡片）
  * - 服藥：每天固定時間（S.prefs.meds）
  * - 注射：下次注射日早上（L.notify.doseRemindAt，預設 09:00）
+ * - 斷食：階段轉換與達標（或每小時），勿擾時段不發（L.notify.freq／quietStart／quietEnd）
  * 每次資料變動後重新排程（先取消自己的，再排）。 */
 import { S, L } from './state.js';
 import { capPlugin } from './health.js';
 import { nextDose } from './records.js';
 import { localDate } from './points.js';
+import { fastNotes, hourlyMessage } from './fasting.js';
+import { FASTING } from './config.js';
+import { HOURLY_MESSAGES } from './messages.js';
+import { fastInfo } from './ui/fasting.js';
 
-const MED_BASE = 7000, DOSE_ID = 7100;
+const MED_BASE = 7000, DOSE_ID = 7100, FAST_BASE = 7200, FAST_MAX = 40;
 const plugin = () => capPlugin('LocalNotifications');
 export const canNotify = () => !!plugin();
 
@@ -38,7 +43,7 @@ export async function testNotify() {
   await P.schedule({ notifications: [{ id: 7199, title: 'Maple 測試通知', body: '看到這則就代表通知正常。', schedule: { at: new Date(Date.now() + 10000), allowWhileIdle: true } }] });
 }
 
-let timer = null;
+let timer = null, scheduled = true;   // scheduled：上次有排通知（沒有東西要排時也要先取消舊的）
 /** 資料變動後呼叫（會延後一點再排，避免連續修改時重複排程） */
 export function scheduleSoon() { clearTimeout(timer); timer = setTimeout(() => { schedule().catch(() => {}); }, 1500); }
 
@@ -46,10 +51,13 @@ export async function schedule() {
   const P = plugin(); if (!P) return { ok: false, reason: 'web' };
   const meds = (S.prefs.meds || []).filter(m => m && m.name && /^\d{2}:\d{2}$/.test(m.time));
   const nd = nextDose(S.entries, localDate(new Date()));
-  if (!meds.length && !nd) return { ok: true, count: 0 };
+  const N = L.notify || {};
+  const fi = fastInfo(), fn = fastNotes(fi, Date.now(), N.freq || 'phase', N.quietStart || '23:00', N.quietEnd || '07:00').slice(0, FAST_MAX);
+  if (!meds.length && !nd && !fn.length && !scheduled) return { ok: true, count: 0 };
   if (!(await allowed(P))) return { ok: false, reason: 'denied' };
   const ids = [];
   for (let i = 0; i < 50; i++) ids.push({ id: MED_BASE + i });
+  for (let i = 0; i < FAST_MAX; i++) ids.push({ id: FAST_BASE + i });
   ids.push({ id: DOSE_ID });
   try { await P.cancel({ notifications: ids }); } catch (e) { /* 第一次沒有可取消的 */ }
   const list = meds.slice(0, 50).map((m, i) => {
@@ -62,6 +70,14 @@ export async function schedule() {
     const at = new Date(y, mo - 1, d, hh, mm);
     if (at > new Date()) list.push({ id: DOSE_ID, title: '今天要注射', body: '建議部位：' + nd.site + '。打完到 Maple 記錄。', schedule: { at, allowWhileIdle: true } });
   }
+  fn.forEach((x, i) => {
+    const h0 = Math.round(x.hours);
+    const n = x.kind === 'done' ? { title: '斷食達標：' + h0 + ' 小時', body: '可以準備吃東西了。累了就休息，斷食不需要逞強。' }
+      : x.kind === 'stage' ? { title: '斷食 ' + h0 + ' 小時', body: '身體現在：' + FASTING.stages[x.index].text }
+      : { title: '斷食 ' + h0 + ' 小時', body: hourlyMessage(x.hours + 0.01, fi.start, HOURLY_MESSAGES) };
+    list.push({ id: FAST_BASE + i, ...n, schedule: { at: new Date(x.at), allowWhileIdle: true } });
+  });
   if (list.length) await P.schedule({ notifications: list });
+  scheduled = list.length > 0;
   return { ok: true, count: list.length };
 }

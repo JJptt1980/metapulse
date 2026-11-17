@@ -1,5 +1,5 @@
-/* 服藥提醒：設定裡新增藥物與時間；飲食頁顯示今天的服藥狀態，按「已服用」記下來 */
-import { S, commit, uid } from '../state.js';
+/* 提醒與通知：設定裡新增藥物與時間、斷食與注射通知；飲食頁顯示今天的服藥狀態與服藥月曆 */
+import { S, L, commit, commitLocal, uid } from '../state.js';
 import { h, toast, section, sumLine, tip, timePick, fold, openSheet, closeSheet } from './common.js';
 import { localDate, addDays } from '../points.js';
 import { canNotify, schedule, notifyStatus, openExactSetting, testNotify } from '../notify.js';
@@ -164,7 +164,18 @@ export function medsSettings() {
   };
   const add = h('button.ghost.full', { type: 'button' }, '＋ 新增藥物');
   add.onclick = () => { meds().push({ id: uid('rx'), name: '降血糖藥', time: '19:00', since: localDate(new Date()) }); commit(); draw(); resched(); };
+  // 斷食與注射通知（只有 Maple app 會發）
+  const N = (L.notify = L.notify || {});
+  const saveN = () => { commitLocal(); resched(); };
+  const freq = h('select', h('option', { value: 'phase' }, '階段轉換和達標時（建議）'), h('option', { value: 'hourly' }, '每小時'), h('option', { value: 'off' }, '不通知'));
+  freq.value = N.freq || 'phase'; freq.onchange = () => { N.freq = freq.value; saveN(); };
+  const notifyBox = h('div', { style: { marginTop: '14px', paddingTop: '10px', borderTop: '1px solid var(--ln)' } },
+    h('label', { style: { marginTop: 0 } }, '斷食通知'), freq,
+    h('label', '晚上不打擾'), h('div.row', { style: { gap: '6px', flexWrap: 'wrap' } },
+      timePick(N.quietStart || '23:00', v => { N.quietStart = v; saveN(); }), h('span.small.mu', '到'),
+      timePick(N.quietEnd || '07:00', v => { N.quietEnd = v; saveN(); })),
+    h('label', '注射日提醒時間'), timePick(N.doseRemindAt || '09:00', v => { N.doseRemindAt = v; saveN(); }));
   draw(); drawSum(); drawStatus();
-  return section('meds', '服藥提醒', sumEl, [list, add, msg, actions,
-    tip('到了吃藥時間，「飲食」頁最上面會出現服藥卡（往下捲也會貼在頂端），吃完按「已服用」。服藥卡下面的「服藥記錄」是月曆，每一天都可以點開修改。在 Maple app 裡，時間到會跳手機通知（第一次會問你要不要允許通知）；網頁版不會通知，只會顯示卡片。這只是提醒，吃藥的方式請照醫師或藥師的指示。')]);
+  return section('meds', '提醒與通知', sumEl, [list, add, msg, actions, notifyBox,
+    tip('到了吃藥時間，「飲食」頁最上面會出現服藥卡（往下捲也會貼在頂端），吃完按「已服用」。服藥卡下面的「服藥記錄」是月曆，每一天都可以點開修改。在 Maple app 裡，時間到會跳手機通知（第一次會問你要不要允許通知）；網頁版不會通知，只會顯示卡片。斷食通知：在每個斷食階段開始和達標時通知（或每小時一次），「晚上不打擾」時段內不發。注射日當天在設定的時間提醒一次。這只是提醒，吃藥的方式請照醫師或藥師的指示。')]);
 }

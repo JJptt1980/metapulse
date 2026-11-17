@@ -119,3 +119,18 @@ test('手動修改的時間最優先，記下一餐就失效', async () => {
   assert.ok(Math.abs(e.pct - 112.5) < 1e-9);
   assert.equal(fastEnd(t0 - 2 * H, 16, { end: t0 - 3 * H }, t0).custom, false, '結束早於開始時不採用');
 });
+
+test('斷食通知：階段轉換＋達標，跳過勿擾時段', async () => {
+  const { fastNotes, inQuiet } = await import('../js/fasting.js');
+  const start = new Date(2026, 10, 17, 19, 0).getTime();       // 19:00 開始
+  const fi = { start, end: start + 16 * H, shift: 0 };
+  const n = fastNotes(fi, start, 'phase', '23:00', '07:00');
+  // 4h=23:00（勿擾）、12h=07:00、16h=11:00 階段＋達標、20h=15:00
+  assert.deepEqual(n.map(x => new Date(x.at).getHours()), [7, 11, 11, 15]);
+  assert.equal(n.filter(x => x.kind === 'done').length, 1);
+  assert.equal(inQuiet(new Date(2026, 10, 17, 2, 0).getTime()), true);
+  assert.equal(inQuiet(new Date(2026, 10, 17, 7, 0).getTime()), false);
+  assert.equal(fastNotes(fi, start, 'off').length, 0);
+  const hourly = fastNotes(fi, start + 0.5 * H, 'hourly', '23:00', '07:00');
+  assert.equal(new Date(hourly[0].at).getHours(), 20);
+});

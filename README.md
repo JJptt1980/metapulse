@@ -30,22 +30,22 @@
 
 ## 從同步版搬資料
 
-「設定」→「從同步版匯入」：
+「設定」→「備份與匯入」：
 
 - 從 Google Drive 讀取同步版的備份檔 `dose-tracker-sync.json`（需先連線同一個 Google 帳號），或貼上同步版「產生備份文字」的內容、選擇備份檔。
-- 匯入前預覽新增、更新、略過的筆數與日期範圍；身高、目標體重、半衰期一併帶入。
-- 可以重複匯入：以同步版每筆記錄的 id 判斷，已匯入的略過，同步版改過的會更新；沒有 id 對應時用日期與數值判斷重複（血壓量測時間相差 2 分鐘內視為同一筆）。
+- 匯入前預覽新增、更新、略過的筆數與日期範圍，並列出存檔裡最新 7 天每天幾筆、會新增幾筆；從 Drive 讀取時顯示同步版的存檔時間，超過 12 小時沒更新會提醒。身高、目標體重、半衰期一併帶入。
+- 可以重複匯入：以同步版每筆記錄的 id 加日期判斷（id 相同且日期相同才算同一筆），已匯入的略過，同步版改過的會更新；沒有 id 對應時用日期與數值判斷重複（血壓量測時間相差 2 分鐘內視為同一筆）。
 - **只讀取同步版的資料，不會寫入、修改或刪除它。**
 
 ## Google Drive 備份
 
-沿用同步版的 OAuth Client ID，scope 只用 `drive.appdata`。備份檔為 `metapulse.json`（包含 entries、meals、foodLibrary、fasts、profile、prefs）。每次修改後自動備份；本機與雲端以最後修改時間較新的為準，不合併。API key、主題、收合狀態等只存在本機，不列入備份。
+沿用同步版的 OAuth Client ID，scope 只用 `drive.appdata`。備份檔為 `metapulse.json`（包含 entries、meals、foodLibrary、fasts、profile、prefs）。每次修改後自動備份。本機與雲端會合併：各筆記錄依 id 合在一起，兩邊都有同一筆時用比較新的那份；刪除的記錄留下標記（保留 180 天），合併後不會再冒出來；寫入雲端前會先合併雲端上的版本（`js/sync.js`）。API key、主題、收合狀態等只存在本機，不列入備份。
 
 ## AI 辨識（Google Gemini）
 
 1. 到 Google AI Studio 申請 API key。
-2. 在「設定」→「AI 辨識」貼上 API key、填模型名稱（例如 `gemini-3.5-flash`），按「測試連線」。
-3. API key 只存在這台裝置，不會列入備份。照片會先縮小到 1024px 再直接從手機送到 Google，app 不保存照片（可在設定開啟 200px 縮圖）。
+2. 在「設定」→「AI 辨識」貼上 API key、從下拉選單選模型（預設 `gemini-3.5-flash-lite`，最快），按「測試連線」。
+3. API key 只存在這台裝置，不會列入備份。照片會先縮小到 768px 再直接從手機送到 Google，app 不保存照片（可在設定開啟 200px 縮圖）。
 
 預設使用 Interactions API（`response_format` 搭配 JSON schema 強制輸出 JSON），失敗時自動改用 `generateContent`（`responseJsonSchema`）。照片與文字共用同一個 schema（`js/gemini.js` 的 `FOOD_SCHEMA`）。
 

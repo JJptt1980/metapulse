@@ -95,7 +95,14 @@ export function leanTrend(entries, meals, proteinTarget, todayStr, cfg = LONGTER
   const pd = Object.values(pro), protein = pd.length >= cfg.leanMinMealDays ? avg(pd) : null;
   const falling = level === 'drop';
   const lowProtein = protein !== null && proteinTarget > 0 && protein < proteinTarget;
-  return { ready, cur: c, prev: p, change, pct, wtChange, fatChange, lostLean, level, share, curDays: cur.length, prevDays: prev.length, protein, mealDays: pd.length, falling, lowProtein, alert: falling && lowProtein };
+  // 還要幾天才能判讀：照現在的量測頻率，第 6 個有體脂的日子滿 28 天後，前一段才夠
+  let readyIn = null;
+  if (!ready) {
+    const fd = [...new Set((entries || []).filter(e => e.wt > 0 && e.fat > 0 && e.date <= todayStr).map(e => e.date))].sort();
+    const p6 = fd.filter(d => d >= from0)[cfg.leanMinDays - 1] || fd[fd.length - 1];
+    if (p6) readyIn = Math.max(1, Math.round((Date.parse(addDays(p6, W)) - Date.parse(todayStr)) / 864e5) + (fd.length < cfg.leanMinDays ? cfg.leanMinDays - fd.length : 0));
+  }
+  return { ready, readyIn, cur: c, prev: p, change, pct, wtChange, fatChange, lostLean, level, share, curDays: cur.length, prevDays: prev.length, protein, mealDays: pd.length, falling, lowProtein, alert: falling && lowProtein };
 }
 
 const sgn = (x, d = 1) => (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x).toFixed(d);

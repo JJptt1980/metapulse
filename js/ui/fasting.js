@@ -324,6 +324,6 @@ export function leanCard() {
 export function leanParts() {
   const t = leanStatus();
   const m = leanSummary(t);
-  const sum = !m ? '累積中（兩段 28 天各需 6 天有體脂：' + t.curDays + '／' + t.prevDays + '）' : m.line.replace('淨體重 28 天：', '28 天 ');
+  const sum = !m ? '資料累積中' + (t.readyIn ? '，約 ' + t.readyIn + ' 天後有判讀' : '') : m.line.replace('淨體重 28 天：', '28 天 ');
   return { sum: h('div.mu.small.row', { style: { marginTop: '2px', alignItems: 'center' } }, m ? dot(TONE[m.tone]) : null, h('span.one', sum)), body: leanBody(t) };
 }

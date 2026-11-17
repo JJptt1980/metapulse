@@ -144,3 +144,13 @@ test('兩餐相隔超過 48 小時視為漏記，不算斷食', () => {
   assert.equal(r['2026-11-10'], undefined);
   assert.equal(r['2026-11-11'], 20);
 });
+
+test('淨體重資料不夠時，估計還要幾天', async () => {
+  const { leanTrend } = await import('../js/longterm.js');
+  const { addDays } = await import('../js/points.js');
+  const today = '2026-11-17', es = [];
+  for (let i = 0; i < 30; i++) es.push({ date: addDays(today, -i), wt: 100, fat: 30 });   // 10/19 起每天量
+  const t = leanTrend(es, [], 100, today);
+  assert.equal(t.ready, false);
+  assert.equal(t.readyIn, 4);   // 第 6 天是 10/24，滿 28 天是 11/21
+});

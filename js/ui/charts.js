@@ -58,13 +58,17 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
   const NONE = ['這天沒有量'];
   const sp = [];
   const wd = dayAvg(ws, e => e.wt), wAxis = span(Object.keys(wd).sort()), m2 = H ? (H / 100) ** 2 : 0;
+  const wv = Object.values(wd), wMin = wv.length ? Math.min(...wv) : 0, wMax = wv.length ? Math.max(...wv) : 0;
+  const lastW = wAxis.length ? wd[wAxis[wAxis.length - 1]] : 0;
+  const showTW = TW > 0 && TW >= wMin - 3;                      // 目標在畫面附近才畫線，否則體重線會被壓扁
   if (wAxis.length) {
     sp.push({
       id: 'w', title: '體重', dates: wAxis,
+      sub: TW > 0 && lastW ? (lastW > TW ? '目標 ' + TW + ' kg・還差 ' + (lastW - TW).toFixed(1) : '已達目標 ' + TW + ' kg') : '',
       extra: i => { const d = wAxis[i]; if (wd[d] == null) return NONE; const x = []; if (H) x.push('BMI ' + (wd[d] / m2).toFixed(1)); const ts = ws.filter(e => e.date === d && e.time).map(e => e.time); if (ts.length) x.push('時間 ' + ts.join('、')); return x; },
       cfg: {
-        type: 'line', data: { labels: wAxis.map(md), datasets: [ln3('體重 (kg)', on(wd, wAxis), wc)].concat(TW ? [{ label: '目標 ' + TW + ' kg', data: wAxis.map(() => TW), borderColor: mu, backgroundColor: mu, borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0 }] : []) },
-        options: { maintainAspectRatio: false, plugins: { legend: { display: TW > 0, labels: leg().labels } }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid() } } },
+        type: 'line', data: { labels: wAxis.map(md), datasets: [ln3('體重 (kg)', on(wd, wAxis), wc)].concat(showTW ? [{ label: '目標 ' + TW + ' kg', data: wAxis.map(() => TW), borderColor: mu, backgroundColor: mu, borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0 }] : []) },
+        options: { maintainAspectRatio: false, plugins: { legend: { display: showTW, labels: leg().labels } }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid() } } },
       },
     });
   }
@@ -175,14 +179,18 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
     }
   }
   if (H && wAxis.length) {
+    const bMin = wMin / m2, bMax = wMax / m2, near = v => v >= bMin - 1.5 && v <= bMax + 1.5;
+    const lines = [];
+    if (near(24)) lines.push({ label: '過重 24', data: wAxis.map(() => 24), borderColor: mu, backgroundColor: mu, borderDash: [6, 4], borderWidth: 1, pointRadius: 0 });
+    if (near(27)) lines.push({ label: '肥胖 27', data: wAxis.map(() => 27), borderColor: mu, backgroundColor: mu, borderDash: [2, 3], borderWidth: 1, pointRadius: 0 });
+    const bNow = lastW / m2;
     sp.push({
-      id: 'bmi', title: 'BMI', dates: wAxis, note: '依身高 ' + H + ' cm 計算。BMI＝體重 ÷ 身高²（公尺）。虛線是台灣成人標準：24 以上過重、27 以上肥胖。',
+      id: 'bmi', title: 'BMI', dates: wAxis,
+      sub: lastW ? '目前 ' + bNow.toFixed(1) + '（' + (bNow < 18.5 ? '過輕' : bNow < 24 ? '正常' : bNow < 27 ? '過重' : '肥胖') + '）' : '', note: '依身高 ' + H + ' cm 計算。BMI＝體重 ÷ 身高²（公尺）。台灣成人標準：24 以上過重、27 以上肥胖；界線在目前數值附近時才畫虛線。',
       extra: i => (wd[wAxis[i]] != null ? ['體重 ' + wd[wAxis[i]].toFixed(1) + ' kg'] : NONE),
       cfg: {
         type: 'line', data: { labels: wAxis.map(md), datasets: [
-          ln3('BMI', wAxis.map(d => (wd[d] != null ? +(wd[d] / m2).toFixed(1) : null)), wc),
-          { label: '過重 24', data: wAxis.map(() => 24), borderColor: mu, backgroundColor: mu, borderDash: [6, 4], borderWidth: 1, pointRadius: 0 },
-          { label: '肥胖 27', data: wAxis.map(() => 27), borderColor: mu, backgroundColor: mu, borderDash: [2, 3], borderWidth: 1, pointRadius: 0 }] },
+          ln3('BMI', wAxis.map(d => (wd[d] != null ? +(wd[d] / m2).toFixed(1) : null)), wc), ...lines] },
         options: { maintainAspectRatio: false, plugins: { legend: leg() }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid() } } },
       },
     });
@@ -196,7 +204,7 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
     if (hv) dsb.push(ln3('內臟脂肪等級', on(V, ax), rc, { yAxisID: 'y1' }));
     sp.push({
       id: 'bc', title: '體脂、骨骼肌與內臟脂肪', dates: ax,
-      cfg: { type: 'line', data: { labels: ax.map(md), datasets: dsb }, options: { maintainAspectRatio: false, plugins: { legend: leg() }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid(), display: hf || hm, position: 'left' }, y1: { display: hv, position: 'right', grid: { drawOnChartArea: false } } } } },
+      cfg: { type: 'line', data: { labels: ax.map(md), datasets: dsb }, options: { maintainAspectRatio: false, plugins: { legend: leg() }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid(), display: hf || hm, position: 'left' }, y1: { display: hv, position: 'right', grid: { drawOnChartArea: false }, ticks: { precision: 0, stepSize: 1 } } } } },
     });
   }
   if (bm.length) {
@@ -242,6 +250,7 @@ async function exportCharts(range, bpv) {
   if (lts.lt.ready) notes.push('長期攝取指數 ' + lts.lt.index.toFixed(2) + '（1.0＝平均每天吃到基礎代謝的量）：' + (lts.msg || '正常範圍') + '。');
   else notes.push('長期攝取指數：資料累積中（有效記錄 ' + lts.lt.validDays + '／21 天）。');
   if (lsm) { notes.push(lsm.line + '。' + lsm.levelText); if (lsm.lost) notes.push(lsm.lost); }
+  else if (S.entries.some(e => e.wt > 0 && e.fat > 0)) { const lt0 = leanStatus(); notes.push('淨體重：資料累積中（要比較兩段 28 天的平均）' + (lt0.readyIn ? '，約 ' + lt0.readyIn + ' 天後有判讀' : '') + '。'); }
   if (fsp && fsp.sub) notes.push('斷食：' + fsp.sub + '。');
   const slots = specs.length + 1;
   const cols = 2, rows = Math.ceil(slots / cols);

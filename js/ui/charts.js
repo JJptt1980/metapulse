@@ -1,7 +1,9 @@
 /* 圖表分頁：移植同步版的圖表（體重、劑量與殘留、血壓、BMI、體組成、身體年齡／基礎代謝）
  * Chart.js 4.4.1 在第一次開啟圖表頁時才從 cdnjs 載入。圖表卡片可收合，收起來的不畫。 */
-import { S, L, commitLocal } from '../state.js';
-import { h, fold, pills } from './common.js';
+import { S, L, commitLocal, plan } from '../state.js';
+import { h, fold, pills, toast } from './common.js';
+import { buildSummary } from '../summary.js';
+import { capPlugin } from '../health.js';
 import { localDate } from '../points.js';
 import { sortEntries, onBoard, dn, fromDn, md, wdOf } from '../records.js';
 import { longTermStatusCard } from './fasting.js';
@@ -164,6 +166,120 @@ export function addHover(sp, pal) {
   sp.cfg.plugins = [crosshair(pal.mu)];
 }
 
+/* ---------- 給 AI 分析：圖表截圖、數據摘要 ---------- */
+let expBlob = null, expUrl = '';
+const LIGHT = { tx: '#14212b', mu: '#5d6b78', ln: '#d5dde4', wc: '#0f766e', dc: '#0e7490', rc: '#c2410c', c3: '#7c3aed', c4: '#15803d' };
+
+/** 所有圖表合成一張高解析度圖片（淺色底，不受深色模式影響） */
+async function exportCharts(range, bpv) {
+  await loadChart();
+  const specs = chartSpecs(LIGHT, range, bpv);
+  if (!specs.length) throw new Error('目前沒有可以畫的圖表。');
+  const font = '"Noto Sans TC",system-ui,sans-serif';
+  const cols = Math.min(2, specs.length), rows = Math.ceil(specs.length / cols);
+  const CW = 1100, CH = 520, PAD = 40, HEAD = 170, TIT = 64;
+  const W = cols * CW + (cols + 1) * PAD, H = HEAD + rows * (TIT + CH + PAD);
+  const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
+  const es = sortEntries(S.entries), dates = es.map(e => e.date), pf = S.profile;
+  g.fillStyle = LIGHT.tx; g.font = 'bold 46px ' + font; g.fillText('MetaPulse 記錄：圖表總覽', PAD, 72);
+  g.fillStyle = LIGHT.mu; g.font = '28px ' + font;
+  g.fillText('資料期間 ' + (dates.length ? dates[0] + ' 到 ' + dates[dates.length - 1] : '無') + '（共 ' + es.length + ' 筆記錄）', PAD, 116);
+  const prof = [];
+  if (+pf.height > 0) prof.push('身高 ' + pf.height + ' cm');
+  if (+pf.targetWeight > 0) prof.push('目標體重 ' + pf.targetWeight + ' kg');
+  if (es.some(e => e.dose > 0)) prof.push('藥物半衰期 ' + (+pf.halfLife || 120) + ' 小時');
+  if (range !== 'all') prof.push('範圍 近 ' + range + ' 天');
+  prof.push('產生於 ' + localDate(new Date()));
+  g.fillText(prof.join('　|　'), PAD, 152);
+  const prev = { color: Chart.defaults.color, size: Chart.defaults.font.size };
+  Chart.defaults.color = LIGHT.mu; Chart.defaults.font.size = 22;
+  try {
+    specs.forEach((sp, i) => {
+      const x = PAD + (i % cols) * (CW + PAD), y = HEAD + Math.floor(i / cols) * (TIT + CH + PAD);
+      g.fillStyle = LIGHT.tx; g.font = 'bold 32px ' + font; g.fillText(sp.title, x, y + 36);
+      try {
+        const oc = document.createElement('canvas'); oc.width = CW; oc.height = CH;
+        Object.assign(sp.cfg.options, { responsive: false, animation: false, devicePixelRatio: 1, maintainAspectRatio: false });
+        const c = new Chart(oc, sp.cfg);
+        g.drawImage(oc, x, y + TIT); c.destroy();
+      } catch (e) { g.fillStyle = '#b91c1c'; g.font = '28px ' + font; g.fillText('這張圖產生失敗', x, y + TIT + 44); }
+    });
+  } finally { Chart.defaults.color = prev.color; Chart.defaults.font.size = prev.size; }
+  const blob = await new Promise(res => { try { cv.toBlob(res, 'image/png'); } catch (e) { res(null); } });
+  if (!blob) throw new Error('圖片太大，這個瀏覽器做不出來。可以把範圍改成「近 30 天」再試。');
+  return { blob, W, H };
+}
+
+const fileName = () => 'metapulse-charts-' + localDate(new Date()) + '.png';
+const b64 = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(blob); });
+
+function download(blob) {
+  const a = h('a', { href: expUrl || URL.createObjectURL(blob), download: fileName() });
+  document.body.append(a); a.click(); a.remove();
+}
+/** 分享圖片：APK 用原生分享，手機瀏覽器用系統分享，都不行就下載 */
+async function shareImage(blob) {
+  const Sh = capPlugin('Share'), Fs = capPlugin('Filesystem');
+  if (Sh && Fs) {
+    const w = await Fs.writeFile({ path: fileName(), data: await b64(blob), directory: 'CACHE' });
+    await Sh.share({ title: 'MetaPulse 圖表', files: [w.uri] });
+    return;
+  }
+  const f = new File([blob], fileName(), { type: 'image/png' });
+  if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: 'MetaPulse 圖表' }); return; }
+  download(blob);
+}
+async function copyText(t, ta) {
+  try { await navigator.clipboard.writeText(t); return true; }
+  catch (e) { ta.style.display = ''; ta.select(); try { return document.execCommand('copy'); } catch (e2) { return false; } }
+}
+
+function aiCard(range, bpv) {
+  const msg = h('div.mu.tiny', { style: { marginTop: '8px', lineHeight: 1.6 } }, '把所有圖表合成一張圖，或把數據整理成一段文字，貼給 AI（例如 ChatGPT、Gemini）幫你看趨勢、整理要問醫師的問題。裡面有你的健康資料，傳給 AI 前請自己評估隱私。');
+  const withPrompt = h('input', { type: 'checkbox', checked: L.sumPrompt !== false });
+  withPrompt.onchange = () => { L.sumPrompt = withPrompt.checked; commitLocal(); };
+  const ta = h('textarea', { rows: 6, readOnly: true, style: { display: 'none', marginTop: '8px' } });
+  const img = h('img', { alt: '圖表截圖', style: { width: '100%', borderRadius: '8px', marginTop: '10px', background: '#fff', display: 'none' } });
+  const imgBtns = h('div.grid2', { style: { marginTop: '8px', display: 'none' } });
+  const shot = h('button.pri.full', { type: 'button' }, '產生圖表截圖');
+  shot.onclick = async () => {
+    shot.disabled = true; msg.textContent = '正在產生圖片…';
+    try {
+      const r = await exportCharts(range, bpv);
+      expBlob = r.blob;
+      try { if (expUrl) URL.revokeObjectURL(expUrl); } catch (e) { /* 略過 */ }
+      expUrl = URL.createObjectURL(r.blob);
+      img.src = expUrl; img.style.display = ''; imgBtns.style.display = '';
+      msg.textContent = '已產生 ' + r.W + ' × ' + r.H + ' 的圖片。可以分享給 AI，或存到手機。';
+    } catch (e) { msg.textContent = '產生圖片失敗：' + (e.message || e); }
+    shot.disabled = false;
+  };
+  const share = h('button.ghost', { type: 'button' }, '分享或儲存');
+  share.onclick = async () => {
+    try { await shareImage(expBlob); }
+    catch (e) { if (!(e && (e.name === 'AbortError' || /cancel/i.test(e.message || '')))) download(expBlob); }
+  };
+  const copyImg = h('button.ghost', { type: 'button' }, '複製圖片');
+  copyImg.onclick = async () => {
+    try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': expBlob })]); toast('已複製圖片'); }
+    catch (e) { toast('這裡不能複製圖片，請改用「分享或儲存」', true); }
+  };
+  imgBtns.append(share, copyImg);
+  const sum = h('button.ghost.full', { type: 'button', style: { marginTop: '8px' } }, '複製數據摘要（文字）');
+  sum.onclick = async () => {
+    const t = buildSummary(S, plan(), localDate(new Date()), withPrompt.checked);
+    ta.value = t;
+    const ok = await copyText(t, ta);
+    msg.textContent = ok ? '已複製數據摘要（' + t.length + ' 字），可以直接貼到 AI 對話。裡面包含飲食點數、熱量、蛋白質和斷食時數。' : '沒辦法自動複製，請在下面的框裡全選後複製。';
+  };
+  return h('div.card', fold('chart-ai', h('h2', { style: { margin: 0 } }, '給 AI 分析'), [h('div', { style: { marginTop: '10px' } },
+    shot, sum,
+    h('label.row', { style: { color: 'var(--tx)', marginTop: '10px', fontSize: '15px' } }, withPrompt, '文字開頭加上給 AI 的說明（請它分析、不要診斷）'),
+    msg, ta, img, imgBtns)], { open: false }));
+}
+
 let live = [];
 const OPEN_DEFAULT = { w: true };
 
@@ -181,6 +297,7 @@ export async function renderCharts(root) {
     wait.textContent = ''; wait.append(h('div.notice', '畫圖的程式下載失敗。請確認有連上網路，再重新整理頁面。')); return;
   }
   wait.remove();
+  root.append(aiCard(range, bpv));
   const pal = palette();
   Chart.defaults.color = pal.mu;
   Chart.defaults.font.family = 'system-ui,-apple-system,"Noto Sans TC",sans-serif';

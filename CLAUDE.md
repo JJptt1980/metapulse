@@ -47,6 +47,9 @@ There is no build or lint step. Tests import the pure modules in `js/` directly.
 - `records.js`, `migrate.js`: dose/body/BP helpers and import from the old "dose-tracker-sync" app's backup.
   - Two records are the same only if they have the same `sid` and the same date.
 - `sync.js`: merge two states by id (newer `ts` wins), with tombstones in `S.deleted` and `activity` merged by date.
+- `sync.js` also has `backupReminder` (today-tab "too long without backup" banner).
+- `omron.js`: parses Omron CSV files and builds an import plan via `planMeasurements`. Undo shares `metapulse-v1-undo` with Health Connect.
+- `summary.js`: builds the plain-text data summary for AI, including daily food stats and fasting hours (`dailyFast`).
 - `gemini.js`: Interactions API with a JSON schema, falling back to `generateContent`.
   - The API that worked is remembered in `L.geminiApiOk`. `FOOD_SCHEMA` is shared by photo and text input.
 - `health.js`: reads Health Connect through `@capgo/capacitor-health`. Only active in the native APK (`isNative`).

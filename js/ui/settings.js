@@ -8,6 +8,7 @@ import { itemCard } from './mealEditor.js';
 import { analyzeMeal, listModels, DEFAULT_MODELS } from '../gemini.js';
 import { backupCard } from './backup.js';
 import { healthCard } from './health.js';
+import { omronCard } from './omron.js';
 
 const r1 = x => Math.round(x * 10) / 10;
 
@@ -211,6 +212,9 @@ function prefsCard() {
     tog('fxVisual', '按「結束進餐」「結束斷食」時的特效'),
     tog('fxSound', '音效（合成的時間停止聲、齒輪聲）'),
     tog('fxVoice', '語音念出「砸瓦魯多」', '用手機內建的語音念出。手機靜音時可能聽不到；部分手機的 app 版不支援語音。'));
+  const bkd = h('select', ...[['0', '不提醒'], ['3', '超過 3 天沒備份'], ['7', '超過 7 天沒備份'], ['14', '超過 14 天沒備份'], ['30', '超過 30 天沒備份']].map(([v, t]) => h('option', { value: v }, t)));
+  bkd.value = String(L.backupDays == null ? 7 : L.backupDays);
+  bkd.onchange = () => { L.backupDays = +bkd.value; commitLocal(); };
   const ask = h('input', { type: 'checkbox', checked: L.askBackup !== false });
   ask.onchange = () => { L.askBackup = ask.checked; commitLocal(); };
   const th = h('input', { type: 'checkbox', checked: !!L.keepThumbs });
@@ -220,6 +224,8 @@ function prefsCard() {
     h('label', '斷食按鈕的特效'), fxBox,
     h('label.row', { style: { color: 'var(--tx)', marginTop: '14px', fontSize: '15px' } }, th, '保存餐點的小張照片（會占用手機空間）'),
     h('div.mu.tiny', '預設不保存照片，只保存辨識出來的食物和營養。'),
+    h('label', '太久沒備份的提醒'), bkd,
+    h('div.mu.tiny', '這段時間有新記錄、卻沒有存到 Google Drive 或產生存檔文字時，在「今日」最上面提醒。'),
     h('label.row', { style: { color: 'var(--tx)', marginTop: '14px', fontSize: '15px' } }, ask, '修改記錄後，如果還沒連線 Google Drive，就問我要不要存檔'),
     h('div.mu.tiny', '這些設定只存在這支手機，不會放進存檔。'));
   drawSumP();
@@ -229,7 +235,7 @@ function prefsCard() {
 export function renderSettings(root) {
   root.textContent = '';
   sectionBudget.left = 1;
-  root.append(healthCard(), backupCard(), profileCard(), aiCard(),
+  root.append(healthCard(), omronCard(), backupCard(), profileCard(), aiCard(),
     (() => { const sl = sumLine(); sl.textContent = S.foodLibrary.length ? S.foodLibrary.length + ' 項' : '還沒有常用食物'; return section('lib', '常用食物庫', sl, [libraryManager(itemCard)]); })(),
     prefsCard(),
     glossaryCard(),

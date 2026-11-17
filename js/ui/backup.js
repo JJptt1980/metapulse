@@ -2,7 +2,7 @@
  * - Google：Drive 自動備份（帳號、同步、切換、中斷）＋ 從 Drive 讀取同步版備份
  * - 其他：備份文字（產生、還原）與同步版的文字／檔案匯入共用一個輸入框，自動判斷格式 */
 import { S, L, commit, commitLocal, replaceState } from '../state.js';
-import { h, toast, section, sumLine } from './common.js';
+import { h, toast, section, sumLine, fold } from './common.js';
 import { connect, disconnect, syncNow, linked, ready, driveStatus, driveEmail, onDrive, readSyncBackup } from '../drive.js';
 import { normalizeState } from '../storage.js';
 import { parseSyncBackup, previewImport, applyImport } from '../migrate.js';
@@ -20,6 +20,25 @@ function dayTable(all, add) {
 }
 const sub = (t, first) => h('div.small', { style: { fontWeight: 650, margin: first ? '0 0 6px' : '18px 0 6px', paddingTop: first ? 0 : '14px', borderTop: first ? 0 : '1px solid var(--ln)' } }, t);
 
+const AI_PROMPT = '請把我貼上的健康記錄（體重、血壓、體組成、注射），轉換成下面格式的 JSON。只輸出 JSON，不要加任何說明文字。\n\n格式：\n{"entries":[{"date":"YYYY-MM-DD","time":"HH:MM","dose":劑量數字,"wt":體重數字,"sys":收縮壓,"dia":舒張壓,"pul":脈搏,"fat":體脂率,"mus":骨骼肌率,"vis":內臟脂肪等級,"bage":身體年齡,"bmr":基礎代謝,"site":"部位","note":"備註"}]}\n\n規則：\n1. date 必須是 YYYY-MM-DD。如果我的資料沒有年份，或日期有歧義（例如 03/04 可能是 3 月 4 日或 4 月 3 日），請先問我，不要自己猜。\n2. time 是量測時間（24 小時制 HH:MM），沒有就填空字串 ""。\n3. dose 是注射劑量（mg），wt 是體重（kg），sys／dia／pul 是收縮壓／舒張壓（mmHg）／脈搏（次/分），fat／mus 是體脂率／骨骼肌率（%），vis 是內臟脂肪等級，bage 是身體年齡（歲），bmr 是基礎代謝（kcal）。同一次量測的數值放同一筆；沒有的項目一律填 0。\n4. 如果體重單位是磅（lb），請換算成公斤，四捨五入到小數 1 位。\n5. site 只能是這七個之一：左腹、腹中、右腹、左大腿、右大腿、左上臂、右上臂。沒有部位或對不上就填空字串 ""，並把原本的部位文字寫進 note。\n6. 依日期由舊到新排序。\n7. 資料裡沒有的內容不要編造。\n\n以下是我的資料：\n（把你的記錄貼在這裡）';
+
+/** 從其他 App 或 Excel 匯入：複製提示詞給 AI 轉換格式，再貼回上面的框 */
+function aiFold() {
+  const ta = h('textarea', { rows: 5, readOnly: true }); ta.value = AI_PROMPT;
+  const cp = h('button.ghost.full', { type: 'button', style: { marginTop: '8px' } }, '複製提示詞');
+  cp.onclick = async () => {
+    try { await navigator.clipboard.writeText(AI_PROMPT); } catch (e) { ta.select(); try { document.execCommand('copy'); } catch (e2) { /* 手動複製 */ } }
+    cp.textContent = '已複製'; setTimeout(() => { cp.textContent = '複製提示詞'; }, 1500);
+  };
+  return fold('ai-import', h('span.small', { style: { fontWeight: 650 } }, '從其他 App 或 Excel 匯入'), [h('div', { style: { marginTop: '8px' } },
+    h('ol.mu.small', { style: { paddingLeft: '20px', lineHeight: 1.7, margin: '0 0 8px' } },
+      h('li', '按「複製提示詞」。'),
+      h('li', '貼到你常用的 AI 對話（例如 ChatGPT、Gemini），再把你的記錄（Excel 複製的表格、CSV 內容都可以）貼在最後面。'),
+      h('li', '把 AI 回覆的內容複製起來，貼到上面的框，按「匯入或還原」。')),
+    h('div.mu.tiny', { style: { lineHeight: 1.6, marginBottom: '6px' } }, '這樣匯入只會「加入」新的記錄，不會取代現有資料，已經有的也不會重複加入。只能匯入身體記錄（體重、血壓、體組成、注射），餐點不行。你的記錄會傳給你用的 AI 服務，請自己評估是否適合。'),
+    ta, cp)]);
+}
+
 export function backupCard() {
   const sumEl = sumLine();
   const out = h('div', { style: { marginTop: '10px' } });   // 匯入預覽與結果（兩區共用）
@@ -34,7 +53,7 @@ export function backupCard() {
     if (pf.targetWeight) pl.push('目標體重 ' + pf.targetWeight + ' kg');
     if (pf.halfLife) pl.push('半衰期 ' + pf.halfLife + ' 小時');
     out.append(h('div', { style: { background: 'var(--soft)', borderRadius: '12px', padding: '10px 12px', lineHeight: 1.8 } },
-      h('div.small', h('b', '同步版存檔：'), source),
+      h('div.small', h('b', '來源：'), source),
       h('div.small', '共 ' + pv.total + ' 筆' + (pv.from ? '（' + pv.from + ' ～ ' + pv.to + '）' : '')),
       h('div.small', '新增 ', h('b', pv.add.length), ' 筆・更新 ', h('b', pv.update.length), ' 筆・已存在略過 ', pv.dup, ' 筆' + (pv.bad ? '・日期格式錯誤略過 ' + pv.bad + ' 筆' : '')),
       pl.length ? h('div.small', '個人資料：' + pl.join('、')) : null,
@@ -121,6 +140,7 @@ export function backupCard() {
     ta, h('div.grid2', { style: { marginTop: '8px' } }, gen, use),
     h('label', '或選擇存檔檔案（.json 或 .txt）'), file, msg,
     h('div.mu.tiny', { style: { marginTop: '6px', lineHeight: 1.6 } }, '「產生存檔文字」會把全部記錄變成一段文字，可以複製貼到記事本或傳給自己保存。貼上或選擇檔案後，app 會自動判斷：MetaPulse 的存檔會「還原」（用它取代現在全部的資料，要再按一次確認）；同步版的存檔會「匯入」（只加入新的記錄，可以重複做）。'),
+    aiFold(),
     out,
   ];
   return section('backup', '備份與匯入', sumEl, body, !linked() || !S.entries.length);

@@ -56,3 +56,17 @@ export function sameData(a, b) {
   const pick = s => JSON.stringify([COLS.map(c => (s[c] || []).map(x => JSON.stringify(x)).sort()), (s.activity || []).map(x => JSON.stringify(x)).sort(), s.profile, s.prefs, Object.keys(s.deleted || {}).sort()]);
   return pick(a) === pick(b);
 }
+
+/**
+ * 太久沒備份的提醒：設定的天數內有新記錄、卻一直沒存到 Google Drive 或產生存檔文字
+ * @param L 本機設定（backupDays：0＝不提醒；lastBackup；bkHide＝今天按過「今天不再提醒」的日期）
+ * @returns {{show:boolean, never:boolean, days:number}}
+ */
+export function backupReminder(S, L, now = Date.now(), today = '') {
+  const lim = L.backupDays == null ? 7 : +L.backupDays, last = +L.lastBackup || 0;
+  const has = (S.entries || []).length + (S.meals || []).length > 0;
+  const dirty = has && (!last || (+S.ts || 0) > last);
+  const age = last ? (now - last) / 864e5 : Infinity;
+  const show = lim > 0 && dirty && age >= lim && L.bkHide !== today;
+  return { show, never: !last, days: last ? Math.floor(age) : 0 };
+}

@@ -1,5 +1,7 @@
 /* 今日分頁：7 天點數池（環形）、保底與蛋白質進度、拍照按鈕、餐點列表 */
-import { S, plan } from '../state.js';
+import { S, L, plan, commitLocal } from '../state.js';
+import { backupReminder } from '../sync.js';
+import { connect, linked } from '../drive.js';
 import { h, icon, fold, hm, WD, fmtPts } from './common.js';
 import { usage, localDate, addDays, exerciseRefund } from '../points.js';
 import { openAddMeal } from './addMeal.js';
@@ -62,6 +64,19 @@ export function renderToday(root) {
   const todayStr = localDate(new Date());
   const b = plan();
   const u = usage(S.meals, todayStr);
+
+  /* ---- 太久沒備份的提醒 ---- */
+  const br = backupReminder(S, L, Date.now(), todayStr);
+  if (br.show) {
+    const goSet = () => document.querySelector('nav.tabs button[data-t="set"]').click();
+    root.append(h('div.card', { style: { borderColor: 'var(--warn)' } },
+      h('div', { style: { fontWeight: 600 } }, br.never ? '還沒有備份過，記錄目前只存在這支手機裡。' : '已經 ' + br.days + ' 天沒有備份，這段時間有新的記錄。'),
+      h('div.mu.tiny', { style: { marginTop: '4px' } }, '換手機或清除瀏覽資料時，沒有備份的記錄會不見。'),
+      h('div.grid2', { style: { marginTop: '10px' } },
+        h('button.pri', { type: 'button', onclick: () => connect(true) }, linked() ? '重新登入 Google Drive' : '連線 Google Drive'),
+        h('button.ghost', { type: 'button', onclick: () => { L.bkHide = todayStr; commitLocal(); renderToday(root); } }, '今天不再提醒')),
+      h('button.link.small', { type: 'button', onclick: goSet, style: { marginTop: '6px' } }, '或到「設定」→「備份與匯入」產生存檔文字')));
+  }
 
   /* ---- 頂部 ---- */
   const top = h('div.card');

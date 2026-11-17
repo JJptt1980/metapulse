@@ -50,6 +50,7 @@ onDrive((t, ev) => {
   if (ev === 'pushed') toast('✓ 已存到 Google Drive');
   if (ev === 'push-failed') toast('✗ 存到雲端失敗，資料還在手機裡', true);
   if (ev === 'pulled') toast('已從 Google Drive 載入');
+  if ((ev === 'pushed' || ev === 'synced') && tab === 'today' && !sheetOpen()) renderToday($('p-today')); // 備份提醒消失
 });
 
 /* 修改後：尚未連線或登入過期時，詢問是否備份（可在設定關閉） */

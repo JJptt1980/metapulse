@@ -139,3 +139,22 @@ export function planMeasurements(recs, existing) {
   }
   return out;
 }
+
+/** 各類記錄最新的一筆（日期＋時間）：{ wt, bp, dose, bc }，沒有的是 null */
+export function latestByType(entries) {
+  const out = { wt: null, bp: null, dose: null, bc: null };
+  for (const e of entries || []) {
+    for (const k of Object.keys(out)) {
+      if (!TYPES[k](e)) continue;
+      const cur = out[k], key = e.date + ' ' + (e.time || '');
+      if (!cur || key > cur.date + ' ' + (cur.time || '')) out[k] = { date: e.date, time: e.time || '' };
+    }
+  }
+  return out;
+}
+
+/** 「體重 11/17 06:57・血壓 11/17 06:59・注射 11/16」；都沒有時回傳空字串 */
+export function latestText(entries) {
+  const l = latestByType(entries), N = { wt: '體重', bp: '血壓', dose: '注射', bc: '體組成' };
+  return Object.keys(N).filter(k => l[k]).map(k => N[k] + ' ' + md(l[k].date) + (l[k].time ? ' ' + l[k].time : '')).join('・');
+}

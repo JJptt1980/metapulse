@@ -1,6 +1,7 @@
 /* 設定頁：Health Connect 同步（只在 APK 中可用；網頁版顯示說明） */
 import { S, L, commit, commitLocal, uid } from '../state.js';
 import { h, toast, section, sumLine } from './common.js';
+import { latestText } from '../records.js';
 import { isNative, healthPlugin, diagnose, readHealth, buildRecords, planHealth, applyHealth } from '../health.js';
 
 const UNDO_KEY = 'metapulse-v1-undo';
@@ -39,6 +40,8 @@ export function healthCard() {
     const line = t => h('div.small', t);
     const box = h('div', { style: { background: 'var(--soft)', borderRadius: '12px', padding: '10px 12px', lineHeight: 1.8 } },
       line('量測記錄：新增 ' + p.add.length + ' 筆・補上身體組成 ' + p.merge.length + ' 筆・已存在 ' + p.dup + ' 筆' + (p.from ? '（' + p.from + ' ～ ' + p.to + '）' : '')),
+      line('Health Connect 最新：' + (latestText(b.recs) || '沒有' + (all.checked ? '' : ' Omron 的') + '量測資料') + (b.activity.length ? '・運動 ' + b.activity[b.activity.length - 1].date.slice(5).replace('-', '/') : '')),
+      line('這支手機最新：' + (latestText(S.entries) || '沒有身體記錄')),
       line('運動消耗：新增 ' + p.act.add.length + ' 天・更新 ' + p.act.update.length + ' 天' + (b.calSource ? '（來源：' + b.calSource + '）' : '（沒有資料）')));
     out.append(box);
     if (b.calSources.length > 1) {

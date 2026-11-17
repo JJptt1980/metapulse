@@ -87,3 +87,14 @@ test('備份提醒：有新記錄且超過天數才提醒，今天按掉就不�
   assert.equal(backupReminder(S, { backupDays: 7, lastBackup: 0, bkHide: '2026-11-17' }, now, '2026-11-17').show, false);
   assert.equal(backupReminder(S, { lastBackup: 0 }, now).never, true);
 });
+
+test('各類記錄最新日期', async () => {
+  const { latestByType, latestText } = await import('../js/records.js');
+  const es = [
+    { date: '2026-11-16', time: '07:10', wt: 105.1 }, { date: '2026-11-17', time: '06:57', wt: 105.3, fat: 28 },
+    { date: '2026-11-17', time: '06:59', sys: 116, dia: 77 }, { date: '2026-11-16', dose: 10 },
+  ];
+  assert.deepEqual(latestByType(es).wt, { date: '2026-11-17', time: '06:57' });
+  assert.equal(latestText(es), '體重 11/17 06:57・血壓 11/17 06:59・注射 11/16・體組成 11/17 06:57');
+  assert.equal(latestText([]), '');
+});

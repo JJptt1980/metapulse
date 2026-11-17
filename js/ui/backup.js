@@ -3,7 +3,8 @@
  * - 其他：備份文字（產生、還原）與同步版的文字／檔案匯入共用一個輸入框，自動判斷格式 */
 import { S, L, commit, commitLocal, replaceState } from '../state.js';
 import { h, toast, section, sumLine, fold } from './common.js';
-import { connect, disconnect, syncNow, linked, ready, driveStatus, driveEmail, onDrive, readSyncBackup } from '../drive.js';
+import { connect, disconnect, syncNow, linked, ready, driveStatus, driveEmail, onDrive, readSyncBackup, readOwnRemote } from '../drive.js';
+import { latestText } from '../records.js';
 import { normalizeState } from '../storage.js';
 import { parseSyncBackup, previewImport, applyImport } from '../migrate.js';
 
@@ -90,6 +91,31 @@ export function backupCard() {
     fromDrive.disabled = false;
   };
 
+  /* ---------- 檢查各處最新日期 ---------- */
+  const check = h('button.ghost.full', { type: 'button', style: { marginTop: '8px' } }, '檢查各處最新日期');
+  check.onclick = async () => {
+    check.disabled = true; out.textContent = '';
+    const box = h('div', { style: { background: 'var(--soft)', borderRadius: '12px', padding: '10px 12px', lineHeight: 1.8 } });
+    const row = (title, ...lines) => box.append(h('div.small', { style: { marginTop: box.childNodes.length ? '6px' : 0 } }, h('b', title)), ...lines.filter(Boolean).map(t => h('div.small.num', t)));
+    const lastMeal = ms => { let t = ''; for (const m of ms || []) if (m.at > t) t = m.at; return t ? '餐點 ' + fmtAt(new Date(t).getTime()) : ''; };
+    row('這支手機', latestText(S.entries) || '沒有身體記錄', lastMeal(S.meals));
+    out.append(box);
+    if (!ready()) { box.append(h('div.small.mu', { style: { marginTop: '6px' } }, linked() ? 'Google Drive 要重新登入，才能檢查雲端。' : '還沒連線 Google Drive，只能看這支手機。')); check.disabled = false; return; }
+    const wait = h('div.row.small.mu', h('span.spin'), '正在讀取 Google Drive…'); box.append(wait);
+    try {
+      const r = await readOwnRemote();
+      row('Google Drive：Maple 存檔', r ? latestText((r.data && r.data.entries) || []) || '沒有身體記錄' : '雲端還沒有 Maple 的存檔', r ? lastMeal(r.data && r.data.meals) : '', r && r.modifiedTime ? '最後存檔：' + fmtAt(r.modifiedTime) : '');
+    } catch (e) { row('Google Drive：Maple 存檔', '讀取失敗：' + (e.message === 'auth' ? '需要重新登入' : e.message)); }
+    try {
+      const r = await readSyncBackup();
+      let txt; try { txt = latestText(parseSyncBackup(r.data).entries) || '沒有記錄'; } catch (e) { txt = '看不懂：' + e.message; }
+      row('Google Drive：同步版存檔（只讀）', txt, r.modifiedTime ? '同步版最後存檔：' + fmtAt(r.modifiedTime) : '');
+    } catch (e) { row('Google Drive：同步版存檔（只讀）', e.message === 'auth' ? '需要重新登入' : e.message); }
+    wait.remove();
+    box.append(h('div.mu.tiny', { style: { marginTop: '6px' } }, '如果同步版的日期比較舊，請先在同步版按一次同步；如果手機比雲端新，按上面的「立即同步」。'));
+    check.disabled = false;
+  };
+
   /* ---------- 其他：文字或檔案 ---------- */
   const ta = h('textarea', { rows: 3, placeholder: '貼上 MetaPulse 或同步版的存檔文字' });
   const file = h('input', { type: 'file', accept: '.json,.txt,application/json,text/plain' });
@@ -132,7 +158,7 @@ export function backupCard() {
   draw();
 
   const body = [
-    sub('Google', true), acct, main, acctBtns,
+    sub('Google', true), acct, main, acctBtns, check,
     h('div.mu.tiny', { style: { marginTop: '8px', lineHeight: 1.6 } }, 'MetaPulse 的存檔會放在你 Google Drive 裡一個看不到的專用資料夾，只有這個 app 能讀寫，別人（包括作者）都看不到。手機和雲端的存檔會合併在一起，同一筆記錄以最後修改的為準，不會整份互相蓋掉。'),
     fromDrive,
     h('div.mu.tiny', { style: { marginTop: '8px', lineHeight: 1.6 } }, '「同步版」是你之前用的「注射與體重記錄 同步版」app。按上面的按鈕，可以把它存在 Google Drive 的記錄搬過來；只會讀取，不會改動同步版，可以重複按，不會重複加入。'),

@@ -143,6 +143,15 @@ export async function readSyncBackup() {
   return { data, modifiedTime: f.modifiedTime ? new Date(f.modifiedTime).getTime() : 0 };
 }
 
+/** 只讀取 Maple 自己在雲端的存檔（檢查最新日期用；找不到回傳 null） */
+export async function readOwnRemote() {
+  if (!ready()) throw new Error('請先連線 Google Drive');
+  const f = await findFile(FN);
+  if (!f) return null;
+  const data = await (await gfetch(API + '/' + f.id + '?alt=media')).json();
+  return { data, modifiedTime: f.modifiedTime ? new Date(f.modifiedTime).getTime() : 0 };
+}
+
 /* 資料變動時自動備份 */
 onChange(ev => { if (!ev || !ev.remote) schedPush(); });
 

@@ -30,6 +30,17 @@ test('刪除過的記錄不會被另一邊加回來', () => {
   assert.deepEqual(m.entries.map(x => x.id), ['a']);
 });
 
+test('還原「只加入，不刪除」：保留現有記錄、個人資料，不採用存檔的刪除標記', async () => {
+  const { addOnly } = await import('../js/sync.js');
+  const local = base(500, [e('a', '2026-11-16', 105)], { profile: { height: 175 }, deleted: { z: 1 } });
+  const backup = base(900, [e('a', '2026-11-16', 99), e('d1', '2026-10-01', 100)], { profile: { height: 160 }, deleted: { a: 800 } });
+  const m = addOnly(local, backup, 1000);
+  assert.deepEqual(m.entries.map(x => x.id).sort(), ['a', 'd1']);
+  assert.equal(m.entries.find(x => x.id === 'a').wt, 105, '同一筆保留這支手機的');
+  assert.equal(m.profile.height, 175);
+  assert.deepEqual(m.deleted, { z: 1 });
+});
+
 test('餐點、運動消耗也會合併；內容相同判斷', () => {
   const a = base(100, [], { meals: [{ id: 'm1', at: '2026-11-17T04:00:00Z' }], activity: [{ date: '2026-11-16', kcal: 100 }] });
   const b = base(200, [], { meals: [{ id: 'm2', at: '2026-11-17T01:00:00Z' }], activity: [{ date: '2026-11-16', kcal: 150 }, { date: '2026-11-17', kcal: 80 }] });

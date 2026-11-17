@@ -58,6 +58,20 @@ export function sameData(a, b) {
 }
 
 /**
+ * 還原時「只加入，不刪除」：把存檔裡的記錄合併進來，現有的記錄、個人資料和設定都保留，
+ * 存檔裡的刪除標記也不採用（避免把這支手機或雲端的真記錄刪掉）
+ */
+export function addOnly(local, incoming, now = Date.now()) {
+  const inc = { ...incoming, deleted: {}, ts: 0 };             // ts=0：同一筆兩邊都有時保留這支手機的
+  const m = mergeStates({ ...local, ts: 1 }, inc, now);
+  m.profile = { ...(local.profile || {}) };
+  m.prefs = { ...(local.prefs || {}) };
+  m.deleted = { ...(local.deleted || {}) };
+  m.ts = now;
+  return m;
+}
+
+/**
  * 太久沒備份的提醒：設定的天數內有新記錄、卻一直沒存到 Google Drive 或產生存檔文字
  * @param L 本機設定（backupDays：0＝不提醒；lastBackup；bkHide＝今天按過「今天不再提醒」的日期）
  * @returns {{show:boolean, never:boolean, days:number}}

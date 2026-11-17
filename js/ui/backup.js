@@ -3,7 +3,8 @@
  * - 其他：備份文字（產生、還原）與同步版的文字／檔案匯入共用一個輸入框，自動判斷格式 */
 import { S, L, commit, commitLocal, replaceState } from '../state.js';
 import { h, toast, section, sumLine, fold, tip } from './common.js';
-import { connect, disconnect, syncNow, linked, ready, driveStatus, driveEmail, onDrive, readSyncBackup, readOwnRemote } from '../drive.js';
+import { connect, disconnect, syncNow, linked, ready, driveStatus, driveEmail, onDrive, readSyncBackup, readOwnRemote, forgetLocal } from '../drive.js';
+import { addOnly } from '../sync.js';
 import { latestText } from '../records.js';
 import { normalizeState } from '../storage.js';
 import { parseSyncBackup, previewImport, applyImport } from '../migrate.js';
@@ -144,16 +145,46 @@ export function backupCard() {
     outText.textContent = '';
     let p;
     try { p = JSON.parse(String(text).replace(/```(json)?/g, '').trim()); } catch (e) { say(outText, '看不懂這段內容，沒有匯入任何資料。請確認貼上的是完整的存檔文字（從 { 開頭到 } 結尾，中間沒有被截斷）。'); return; }
-    if (p && Array.isArray(p.meals)) {             // MetaPulse 自己的備份 → 還原（取代全部）
-      const ok = h('button.danger.full', { type: 'button', style: { marginTop: '8px' } }, '確認還原（取代全部資料）');
+    if (p && Array.isArray(p.meals)) {             // MetaPulse 自己的備份 → 還原
+      const cnt = (p.entries || []).length + ' 筆身體記錄、' + p.meals.length + ' 筆餐點';
       const no = h('button.ghost.full', { type: 'button', style: { marginTop: '6px' }, onclick: () => { outText.textContent = ''; } }, '取消');
-      ok.onclick = async () => {
-        no.disabled = true; busy(ok, '還原中…'); await tick(500);
-        lastResult = { at: Date.now(), text: '✓ 已還原 ' + (p.entries || []).length + ' 筆身體記錄、' + p.meals.length + ' 筆餐點。' };
-        replaceState(normalizeState(p));     // 會整頁重畫，結果由 lastResult 顯示
+      const hasLocal = S.entries.length + S.meals.length + S.foodLibrary.length + (S.fasts || []).length > 0;
+      if (!hasLocal && !linked()) {                // 手機是空的、也沒連雲端：直接還原
+        const ok = h('button.pri.full', { type: 'button', style: { marginTop: '8px' } }, '確認還原');
+        ok.onclick = async () => {
+          no.disabled = true; busy(ok, '還原中…'); await tick(500);
+          lastResult = { at: Date.now(), text: '✓ 已還原 ' + cnt + '。' };
+          replaceState(normalizeState(p), true);  // 手機原本是空的，不需要記刪除
+          toast('已還原');
+        };
+        outText.append(h('div.notice', '這是 MetaPulse 的備份（' + cnt + '）。'), ok, no);
+        reveal(outText);
+        return;
+      }
+      // 手機已有記錄或已連雲端：直接取代會把現有記錄記成「刪除」，同步後雲端和其他裝置的也會被刪 → 只提供兩種安全做法
+      const add = h('button.pri.full', { type: 'button', style: { marginTop: '8px' } }, '只加入，不刪除（建議）');
+      add.onclick = async () => {
+        no.disabled = true; busy(add, '加入中…'); await tick(500);
+        const before = S.entries.length + S.meals.length;
+        const m = normalizeState(addOnly(JSON.parse(JSON.stringify(S)), normalizeState(p)));
+        lastResult = { at: Date.now(), text: '✓ 已加入，現在共 ' + m.entries.length + ' 筆身體記錄、' + m.meals.length + ' 筆餐點（原本 ' + before + ' 筆，沒有刪除任何記錄）。' };
+        replaceState(m);                        // 會整頁重畫，結果由 lastResult 顯示
+        toast('已加入');
+      };
+      const wipe = h('button.danger.full', { type: 'button', style: { marginTop: '6px' } }, '先清除這支手機，再還原');
+      wipe.onclick = async () => {
+        if (!wipe.dataset.c) { wipe.dataset.c = 1; wipe.textContent = '再按一次確認（雲端不會動）'; setTimeout(() => { wipe.dataset.c = ''; wipe.textContent = '先清除這支手機，再還原'; }, 4000); return; }
+        no.disabled = true; busy(wipe, '還原中…'); await tick(500);
+        forgetLocal(); L.driveLinked = false; commitLocal();   // 先離開雲端：之後不讀不寫 Google Drive
+        lastResult = { at: Date.now(), text: '✓ 已清除這支手機並還原 ' + cnt + '。Google Drive 已中斷，雲端的存檔沒有被動到；之後重新連線同一個帳號，雲端的記錄會合併回來。' };
+        replaceState(normalizeState(p), true);    // 不記刪除、不自動備份
         toast('已還原');
       };
-      outText.append(h('div.notice', '這是 MetaPulse 的備份（' + (p.entries || []).length + ' 筆身體記錄、' + p.meals.length + ' 筆餐點）。還原會用它取代目前所有資料。'), ok, no);
+      outText.append(h('div.notice', { style: { background: 'var(--warn-soft)' } },
+        h('b', '這是 MetaPulse 的備份（' + cnt + '）。'),
+        h('div', { style: { marginTop: '4px' } }, '這支手機已經有記錄' + (linked() ? '，也連著 Google Drive' : '') + '。直接取代會把現有記錄當成刪除' + (linked() ? '，同步後雲端和其他裝置上的也會被刪掉' : '') + '，所以請選：')),
+        add, wipe, no,
+        tip('只加入，不刪除：把備份裡的記錄合併進來，現有的記錄、個人資料和設定都保留。', h('br'), '先清除這支手機，再還原：這支手機只剩備份裡的資料，並中斷 Google Drive（雲端存檔不會動）。'));
       reveal(outText);
       return;
     }

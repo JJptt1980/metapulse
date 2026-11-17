@@ -9,6 +9,7 @@ import { analyzeMeal, listModels, DEFAULT_MODELS } from '../gemini.js';
 import { backupCard } from './backup.js';
 import { healthCard } from './health.js';
 import { omronCard } from './omron.js';
+import { dangerCard } from './reset.js';
 
 const r1 = x => Math.round(x * 10) / 10;
 
@@ -242,6 +243,7 @@ export function renderSettings(root) {
     prefsCard(),
     glossaryCard(),
     section('legal', '關於本 app 與免責聲明', null, [legal()]),
+    dangerCard(),
     h('p.mu.small', { style: { textAlign: 'center', margin: '18px 0 6px' } }, '覺得好用？', h('a', { href: 'https://ko-fi.com/killnopig', target: '_blank', rel: 'noopener', style: { color: 'var(--ac)' } }, '請我喝杯咖啡'), '（自願，不影響任何功能）'));
 }
 

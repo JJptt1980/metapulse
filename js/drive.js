@@ -126,6 +126,11 @@ export function disconnect() {
   emit('只存在這支手機（已中斷 Google Drive）', 'unlinked');
 }
 
+/** 只忘記這支手機的登入（不撤銷 Google 授權，不讀寫雲端；其他裝置不受影響）。清除資料前用 */
+export function forgetLocal() {
+  clearTimeout(tmr); tok = null; fid = null;
+}
+
 /** 立即同步（已連線時） */
 export async function syncNow() {
   if (!ready()) { connect(true); return; }

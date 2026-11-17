@@ -100,6 +100,22 @@ export function info3({ now, advice, about, tone = 'var(--ac)' }) {
   return h('div', blk('現況', tone, now, true), advice ? blk('建議', 'var(--c1)', advice, false) : null, about ? tip(...[].concat(about)) : null);
 }
 
+/**
+ * 24 小時制的時間選單（時 00～23、分每 5 分鐘）；手機內建的時間選擇器會照地區顯示上午／下午，所以自己做
+ * value 'HH:MM'；onChange(新的 'HH:MM')
+ */
+export function timePick(value, onChange) {
+  const [h0, m0] = (/^\d{1,2}:\d{2}$/.test(value || '') ? value : '19:00').split(':').map(Number);
+  const pad = n => String(n).padStart(2, '0');
+  const hs = h('select', { 'aria-label': '時', style: { width: '76px', textAlign: 'center' } }, ...Array.from({ length: 24 }, (_, i) => h('option', { value: pad(i) }, pad(i))));
+  const mins = Array.from({ length: 12 }, (_, i) => i * 5); if (!mins.includes(m0)) mins.push(m0); mins.sort((a, b) => a - b);
+  const ms = h('select', { 'aria-label': '分', style: { width: '76px', textAlign: 'center' } }, ...mins.map(m => h('option', { value: pad(m) }, pad(m))));
+  hs.value = pad(h0); ms.value = pad(m0);
+  const fire = () => onChange(hs.value + ':' + ms.value);
+  hs.onchange = fire; ms.onchange = fire;
+  return h('div.row', { style: { gap: '4px', flex: '0 0 auto' } }, hs, h('b', ':'), ms);
+}
+
 /** 說明收在一行「ⓘ 說明」裡，點了才展開（不記住開合） */
 export function tip(...kids) {
   return h('details.tip', h('summary', 'ⓘ 說明'), h('div', ...kids));

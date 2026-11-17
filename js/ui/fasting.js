@@ -1,6 +1,6 @@
 /* 今日頁：斷食卡片（計時、階段進度條、每小時提示、三種模式）與長期指數提示 */
 import { S, L, commit, commitLocal, plan, uid } from '../state.js';
-import { h, fold, pills, toast, tip, info3 } from './common.js';
+import { h, fold, pills, toast, tip, info3, timePick } from './common.js';
 import { FASTING } from '../config.js';
 import { HOURLY_MESSAGES, OMAD_DONE } from '../messages.js';
 import { currentFast, fastEnd, lastMealGroup, mealShift, stageAt, stageStarts, hourlyMessage, hybridSuggestion, eatingWindow, hm, dur } from '../fasting.js';
@@ -215,8 +215,7 @@ export function fastingCard() {
   const modeBody = [h('div', { style: { marginTop: '8px' } }, pills(MODES, mode, pickMode))];
   if (mode === 'PURE_DYNAMIC') modeBody.push(h('div', { style: { marginTop: '8px' } }, h('div.mu.tiny', '目標（小時）'), pills(FASTING.freeTargets.map(t => [t, String(t)]), +P.fastTarget || FASTING.freeTargetDefault, v => { P.fastTarget = v; L.collapsed['fast-mode'] = 0; commit(); })));
   if (mode === 'STRICT_MANUAL') {
-    const timeIn = h('input', { type: 'time', value: P.windowStart || '12:00', style: { width: '150px' } });
-    timeIn.onchange = () => { P.windowStart = timeIn.value || '12:00'; commit(); };
+    const timeIn = timePick(P.windowStart || '12:00', v => { P.windowStart = v; L.collapsed['fast-mode'] = 1; commit(); });
     modeBody.push(h('div', { style: { marginTop: '8px' } }, pills(PLANS.map(p => [p, p === '24H' ? '一天一餐' : p]), P.strictPlan || '16:8', v => { P.strictPlan = v; L.collapsed['fast-mode'] = 0; commit(); })),
       h('div.row', { style: { marginTop: '8px' } }, h('span.small.mu', '進食窗口從'), timeIn, h('span.small.mu', '開始，' + win.eatHours + ' 小時')),
       h('div.small', { style: { marginTop: '6px' } }, win.inWindow ? '現在在進食窗口中，到 ' + hm(win.closesAt) + ' 結束' : '進食窗口 ' + dayLabel(win.opensAt) + ' 開始'));

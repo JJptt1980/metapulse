@@ -1,8 +1,8 @@
 /* 服藥提醒：設定裡新增藥物與時間；飲食頁顯示今天的服藥狀態，按「已服用」記下來 */
 import { S, commit, uid } from '../state.js';
-import { h, toast, section, sumLine, tip } from './common.js';
+import { h, toast, section, sumLine, tip, timePick } from './common.js';
 import { localDate } from '../points.js';
-import { canNotify, schedule } from '../notify.js';
+import { canNotify, schedule, notifyStatus, openExactSetting, testNotify } from '../notify.js';
 
 const minOf = t => +t.slice(0, 2) * 60 + +t.slice(3, 5);
 const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
@@ -55,23 +55,36 @@ export function medsSettings() {
   const meds = () => (S.prefs.meds = S.prefs.meds || []);
   const drawSum = () => { const m = meds(); sumEl.textContent = m.length ? m.map(x => x.time + ' ' + x.name).join('・') : '還沒有設定'; };
   const list = h('div');
-  const msg = h('div.mu.tiny.one', { style: { marginTop: '6px' } });
-  const resched = async () => { drawSum(); if (canNotify()) { const r = await schedule().catch(() => ({ ok: false })); msg.textContent = r.ok ? '已排好手機通知' : r.reason === 'denied' ? '手機沒有允許通知，請到手機設定開啟' : ''; } };
+  const msg = h('div.small.one', { style: { marginTop: '10px', fontWeight: 600 } });
+  const actions = h('div.grid2', { style: { marginTop: '6px', gap: '6px' } });
+  /** 通知狀態一行＋測試按鈕；缺「準時鬧鐘」時給一顆打開設定的按鈕 */
+  const drawStatus = async () => {
+    const st = await notifyStatus().catch(() => ({ web: true }));
+    actions.textContent = '';
+    if (st.web) { msg.style.color = 'var(--mu)'; msg.textContent = '這是網頁版，不會發通知（只會在飲食頁顯示服藥卡）'; return; }
+    const bad = st.display === 'denied' ? '手機沒有允許 Maple 發通知' : st.exact === 'denied' ? '沒有開啟「準時鬧鐘」，通知可能延後或不會跳' : '';
+    msg.style.color = bad ? 'var(--warn)' : 'var(--ac)';
+    msg.textContent = bad || ('✓ 通知正常・已排好 ' + st.pending + ' 個');
+    const test = h('button.ghost', { type: 'button', style: { padding: '8px' } }, '測試通知（10 秒後）');
+    test.onclick = async () => { try { await testNotify(); toast('10 秒後會跳一則測試通知'); } catch (e) { toast(e.message, true); } drawStatus(); };
+    actions.append(test);
+    if (st.exact === 'denied') actions.append(h('button.ghost', { type: 'button', style: { padding: '8px' }, onclick: async () => { await openExactSetting(); setTimeout(drawStatus, 1500); } }, '開啟準時鬧鐘'));
+  };
+  const resched = async () => { drawSum(); if (canNotify()) await schedule().catch(() => {}); drawStatus(); };
   const draw = () => {
     list.textContent = '';
     meds().forEach((m, i) => {
       const name = h('input', { value: m.name, placeholder: '藥名，例如：降血糖藥' });
-      const time = h('input', { type: 'time', value: m.time, style: { width: '120px', flex: '0 0 auto' } });
+      const time = timePick(m.time, v => { m.time = v; commit(); resched(); });
       name.onchange = () => { m.name = name.value.trim() || '藥'; commit(); resched(); };
-      time.onchange = () => { m.time = time.value || '19:00'; commit(); resched(); };
       const del = h('button.ghost', { type: 'button', style: { padding: '8px 12px', flex: '0 0 auto' } }, '刪除');
       del.onclick = () => { meds().splice(i, 1); commit(); draw(); resched(); };
-      list.append(h('div.row', { style: { marginTop: '8px', gap: '8px' } }, h('div.grow', name), time, del));
+      list.append(h('div', { style: { marginTop: '8px' } }, name, h('div.row.between', { style: { marginTop: '6px', gap: '8px' } }, time, del)));
     });
   };
   const add = h('button.ghost.full', { type: 'button' }, '＋ 新增藥物');
   add.onclick = () => { meds().push({ id: uid('rx'), name: '降血糖藥', time: '19:00' }); commit(); draw(); resched(); };
-  draw(); drawSum();
-  return section('meds', '服藥提醒', sumEl, [list, add, msg,
+  draw(); drawSum(); drawStatus();
+  return section('meds', '服藥提醒', sumEl, [list, add, msg, actions,
     tip('到了吃藥時間前後，「飲食」頁最上面會出現服藥卡，吃完按「已服用」。在 Maple app 裡，時間到會跳手機通知（第一次會問你要不要允許通知）；網頁版不會通知，只會顯示卡片。這只是提醒，吃藥的方式請照醫師或藥師的指示。')]);
 }

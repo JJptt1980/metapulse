@@ -20,6 +20,24 @@ async function allowed(P) {
   } catch (e) { return false; }
 }
 
+/** 通知狀態（設定頁顯示用）：web＝網頁版；display＝是否允許通知；exact＝是否允許準時鬧鐘（Android 12 以上） */
+export async function notifyStatus() {
+  const P = plugin(); if (!P) return { web: true };
+  let display = 'prompt', exact = 'granted', pending = 0;
+  try { display = (await P.checkPermissions()).display; } catch (e) { /* 舊版外掛 */ }
+  try { if (P.checkExactNotificationSetting) exact = (await P.checkExactNotificationSetting()).exact_alarm; } catch (e) { /* Android 11 以下沒有這項 */ }
+  try { pending = ((await P.getPending()).notifications || []).length; } catch (e) { /* 略過 */ }
+  return { web: false, display, exact, pending };
+}
+/** 打開手機的「準時鬧鐘」權限設定 */
+export async function openExactSetting() { const P = plugin(); if (P && P.changeExactNotificationSetting) await P.changeExactNotificationSetting(); }
+/** 10 秒後跳一則測試通知 */
+export async function testNotify() {
+  const P = plugin(); if (!P) throw new Error('網頁版不會發通知，請在 Maple app 裡試');
+  if (!(await allowed(P))) throw new Error('手機沒有允許 Maple 發通知');
+  await P.schedule({ notifications: [{ id: 7199, title: 'Maple 測試通知', body: '看到這則就代表通知正常。', schedule: { at: new Date(Date.now() + 10000), allowWhileIdle: true } }] });
+}
+
 let timer = null;
 /** 資料變動後呼叫（會延後一點再排，避免連續修改時重複排程） */
 export function scheduleSoon() { clearTimeout(timer); timer = setTimeout(() => { schedule().catch(() => {}); }, 1500); }

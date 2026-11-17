@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <script>
 /* 版本號：發布新版時改這裡。版本檢查會比對線上 index.html 的這一行。 */
-window.APP_VERSION='0.9.2';
+window.APP_VERSION='0.9.3';
 /* 載入失敗時不要只剩空白：記下錯誤，8 秒後程式還沒啟動就顯示原因與「重新載入」 */
 (function(){var errs=[];
 addEventListener('error',function(e){var t=e.target;if(t&&t!==window&&(t.src||t.href))errs.push('載入失敗：'+(t.src||t.href).split('/').slice(-2).join('/'));else errs.push((e.message||'程式檔載入失敗（網路或舊快取）')+(e.filename?'（'+e.filename.split('/').pop().split('?')[0]+':'+e.lineno+'）':''))},true);
@@ -142,6 +142,7 @@ nav.tabs button[hidden]{display:none}
 .legal p{margin:0 0 8px}
 /* Maple app：狀態列與手勢列不要蓋到內容 */
 .native body{padding-top:max(env(safe-area-inset-top,0px),32px)}
+.native body::before{content:"";position:fixed;top:0;left:0;right:0;height:max(env(safe-area-inset-top,0px),32px);background:#141917;z-index:45;pointer-events:none}
 .native nav.tabs{padding-bottom:max(env(safe-area-inset-bottom,0px),12px)}
 .native main{padding-bottom:calc(104px + env(safe-area-inset-bottom,0px))}
 /* 極簡：每個選項、按鈕、摘要都只佔一行；說明收在 ⓘ */

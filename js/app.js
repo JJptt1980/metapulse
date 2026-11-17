@@ -11,6 +11,8 @@ import { h, toast } from './ui/common.js';
 import { initDrive, onDrive, driveStatus, driveEmail, connect, linked, ready } from './drive.js';
 import { scheduleSoon } from './notify.js';
 import { preloadSounds } from './sounds.js';
+import { isNative } from './health.js';
+if (isNative()) document.documentElement.classList.add('native');   // 保險：頁面開頭沒偵測到 app 時補上（狀態列留白）
 
 const APP_VERSION = window.APP_VERSION;
 $('ver').textContent = 'v' + APP_VERSION;

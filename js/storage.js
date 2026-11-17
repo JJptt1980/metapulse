@@ -28,7 +28,7 @@ export function defaultState() {
 
 export function defaultLocal() {
   return {
-    geminiKey: '', geminiModel: 'gemini-3.5-flash', geminiApi: 'auto',
+    geminiKey: '', geminiModel: 'gemini-3.5-flash-lite', geminiModels: [], geminiApi: 'auto',
     theme: 'auto', keepThumbs: false, collapsed: {}, disclaimerOk: false,
     driveLinked: false, lastBackup: 0, askBackup: true, backupDays: 7,
     notify: { freq: 'phase', quietStart: '23:00', quietEnd: '07:00', doseRemindAt: '09:00' },

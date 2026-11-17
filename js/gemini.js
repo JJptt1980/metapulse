@@ -141,6 +141,40 @@ export async function analyzeMeal(o) {
   return { ...clean(parsed), raw, api: used, ms: Date.now() - t0 };
 }
 
+/** 適合辨識餐點的預設模型清單（還沒向 Google 查詢時使用） */
+export const DEFAULT_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-4-hydrogen', 'gemini-4-argon'];
+
+/** 向 Google 查詢這把 key 能用的模型（只留能產生文字的 Gemini 模型） */
+export async function listModels(key, signal) {
+  if (!key) throw new Error('請先輸入 API key');
+  const names = [];
+  let token = '';
+  for (let i = 0; i < 5; i++) {
+    const r = await fetch(BASE + '/models?pageSize=1000' + (token ? '&pageToken=' + encodeURIComponent(token) : ''), { headers: { 'x-goog-api-key': key }, signal });
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(j?.error?.message || 'HTTP ' + r.status);
+    for (const m of j?.models || []) {
+      const id = String(m.name || '').replace(/^models\//, '');
+      const methods = m.supportedGenerationMethods || m.supportedActions || [];
+      if (!/^gemini/i.test(id)) continue;
+      if (/embedding|tts|image|audio|live|transcribe|robotics|computer-use/i.test(id)) continue;
+      if (methods.length && !methods.some(x => /generateContent|interaction/i.test(x))) continue;
+      names.push(id);
+    }
+    token = j?.nextPageToken;
+    if (!token) break;
+  }
+  return sortModels([...new Set(names)]);
+}
+
+/** 排序：新版號在前；同版號 lite → flash → 其他；預覽、實驗版放後面 */
+export function sortModels(list) {
+  const ver = id => { const m = id.match(/gemini-(\d+(?:\.\d+)?)/); return m ? +m[1] : 0; };
+  const tier = id => /preview|exp|latest/.test(id) ? 1 : 0;
+  const kind = id => /flash-lite/.test(id) ? 0 : /flash/.test(id) ? 1 : 2;
+  return list.slice().sort((a, b) => tier(a) - tier(b) || ver(b) - ver(a) || kind(a) - kind(b) || a.localeCompare(b));
+}
+
 /** 把照片縮小成 JPEG（送 API 用 768；縮圖用 200） */
 export function shrinkImage(file, maxW = 768, quality = 0.8, byWidth = false) {
   return new Promise((resolve, reject) => {

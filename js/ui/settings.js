@@ -5,7 +5,7 @@ import { ACTIVITY_LEVELS, BUDGET } from '../config.js';
 import { bmrMifflin, ageFrom } from '../points.js';
 import { libraryManager } from './library.js';
 import { itemCard } from './mealEditor.js';
-import { analyzeMeal } from '../gemini.js';
+import { analyzeMeal, listModels, DEFAULT_MODELS } from '../gemini.js';
 import { normalizeState } from '../storage.js';
 
 const r1 = x => Math.round(x * 10) / 10;
@@ -95,9 +95,36 @@ function aiCard() {
   const key = h('input', { type: 'password', value: L.geminiKey, placeholder: '貼上 API key', autocomplete: 'off', spellcheck: false });
   key.oninput = () => { L.geminiKey = key.value.trim(); commitLocal(); };
   const eye = h('button.ghost', { type: 'button', 'aria-label': '顯示或隱藏', onclick: () => { key.type = key.type === 'password' ? 'text' : 'password'; } }, icon('eye'));
-  const model = h('input', { value: L.geminiModel, placeholder: '例如 gemini-3.5-flash', list: 'gm-list', autocomplete: 'off', spellcheck: false });
-  const dl = h('datalist', { id: 'gm-list' }, ...['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-4-hydrogen', 'gemini-4-argon'].map(v => h('option', { value: v })));
-  model.oninput = () => { L.geminiModel = model.value.trim(); commitLocal(); };
+  const modelBox = h('div');
+  const modelMsg = h('div.mu.tiny', { style: { marginTop: '4px' } });
+  const drawModels = () => {
+    modelBox.textContent = '';
+    const list = (L.geminiModels && L.geminiModels.length ? L.geminiModels : DEFAULT_MODELS).slice();
+    if (L.geminiModel && !list.includes(L.geminiModel)) list.unshift(L.geminiModel);
+    const sel = h('select', { 'aria-label': '模型' },
+      ...list.map(v => h('option', { value: v }, v + (v === 'gemini-3.5-flash-lite' ? '（預設）' : ''))),
+      h('option', { value: '__custom' }, '自訂名稱…'));
+    sel.value = L.geminiModel || list[0];
+    const custom = h('input', { value: L.geminiModel, placeholder: '輸入模型名稱', autocomplete: 'off', spellcheck: false, style: { marginTop: '8px', display: 'none' } });
+    custom.oninput = () => { L.geminiModel = custom.value.trim(); commitLocal(); };
+    sel.onchange = () => {
+      if (sel.value === '__custom') { custom.style.display = ''; custom.value = ''; custom.focus(); return; }
+      custom.style.display = 'none'; L.geminiModel = sel.value; commitLocal();
+    };
+    const fetchBtn = h('button.ghost', { type: 'button', style: { whiteSpace: 'nowrap' } }, '取得可用模型');
+    fetchBtn.onclick = async () => {
+      fetchBtn.disabled = true; modelMsg.textContent = '查詢中…';
+      try {
+        const ms = await listModels(L.geminiKey);
+        if (!ms.length) throw new Error('沒有找到可用的模型');
+        L.geminiModels = ms; commitLocal(); drawModels();
+        modelMsg.textContent = '已取得 ' + ms.length + ' 個可用模型。';
+      } catch (e) { fetchBtn.disabled = false; modelMsg.textContent = '查詢失敗：' + (e.message || e); }
+    };
+    modelBox.append(h('div.row', h('div.grow', sel), fetchBtn), custom);
+  };
+  drawModels();
+  modelMsg.textContent = L.geminiModels && L.geminiModels.length ? '' : '清單是內建的；按「取得可用模型」可查你的帳號實際能用哪些。';
   const api = h('select', h('option', { value: 'auto' }, '自動（先用 Interactions，失敗改 generateContent）'), h('option', { value: 'interactions' }, 'Interactions API'), h('option', { value: 'generateContent' }, 'generateContent'));
   api.value = L.geminiApi || 'auto';
   api.onchange = () => { L.geminiApi = api.value; commitLocal(); };
@@ -117,13 +144,12 @@ function aiCard() {
   };
   card.append(
     h('label', 'API key'), h('div.row', h('div.grow', key), eye),
-    h('label', '模型名稱'), model, dl,
-    h('div.mu.tiny', { style: { marginTop: '4px' } }, '想要更快可試 gemini-3.5-flash-lite（較快，但可能較不準）。'),
+    h('label', '模型'), modelBox, modelMsg,
     h('label.row', { style: { color: 'var(--tx)', marginTop: '12px', fontSize: '15px' } }, fast, '速度優先（讓模型少思考）'),
     fold('ai-adv', h('span.small.mu', '進階：API 介面'), [h('label', 'API 介面'), api]),
     test, out,
     h('div.mu.tiny', { style: { marginTop: '8px', lineHeight: 1.6 } },
-      'API key 只存在這台裝置，不會列入備份；照片與文字直接從你的手機送到 Google。可到 Google AI Studio 申請 API key。模型名稱請以 Google 公告為準。'));
+      'API key 只存在這台裝置，不會列入備份；照片與文字直接從你的手機送到 Google。可到 Google AI Studio 申請 API key。'));
   return card;
 }
 

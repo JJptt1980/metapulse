@@ -74,3 +74,19 @@ test('自動模式記得上次成功的 API，直接先用它', async () => {
   assert.equal(urls.length, 1);
   assert.equal(r.api, 'generateContent');
 });
+
+test('取得可用模型：只留文字用的 Gemini，lite 排前面', async () => {
+  const { listModels } = await import('../js/gemini.js');
+  globalThis.fetch = async (url, o) => {
+    assert.equal(o.headers['x-goog-api-key'], 'k');
+    return { ok: true, status: 200, json: async () => ({ models: [
+      { name: 'models/gemini-3.5-flash', supportedGenerationMethods: ['generateContent'] },
+      { name: 'models/gemini-3.5-flash-lite', supportedGenerationMethods: ['generateContent'] },
+      { name: 'models/gemini-4-argon-preview', supportedGenerationMethods: ['generateContent'] },
+      { name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] },
+      { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
+      { name: 'models/gemini-3.5-flash-tts', supportedGenerationMethods: ['generateContent'] },
+    ] }) };
+  };
+  assert.deepEqual(await listModels('k'), ['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-4-argon-preview']);
+});

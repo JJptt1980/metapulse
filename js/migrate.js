@@ -9,10 +9,10 @@ export function parseSyncBackup(input) {
   if (typeof input === 'string') {
     const t = input.replace(/```(json)?/g, '').trim();
     if (!t) throw new Error('內容是空的');
-    try { p = JSON.parse(t); } catch (e) { throw new Error('不是有效的備份文字，請貼上同步版「產生備份文字」的完整內容'); }
+    try { p = JSON.parse(t); } catch (e) { throw new Error('看不懂這段內容，請貼上同步版「產生備份文字」的完整內容'); }
   }
-  if (!p || !Array.isArray(p.entries)) throw new Error('找不到 entries，這不是同步版的備份');
-  if (Array.isArray(p.meals)) throw new Error('這是 MetaPulse 自己的備份，請用「從文字還原」');
+  if (!p || !Array.isArray(p.entries)) throw new Error('這不是同步版的存檔');
+  if (Array.isArray(p.meals)) throw new Error('這是 MetaPulse 自己的存檔，請用「匯入或還原」');
   const entries = [];
   let bad = 0;
   p.entries.forEach((e, i) => {

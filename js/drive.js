@@ -13,7 +13,7 @@ const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
 
 let tok = null, tokExp = 0, tc = null, fid = null, tmr = null;
 const listeners = new Set();
-let status = L.driveLinked ? 'Google Drive 已連結，連線中…' : '本機儲存';
+let status = L.driveLinked ? 'Google Drive 已連結，連線中…' : '只存在這支手機';
 export const driveEmail = () => L.driveEmail || '';
 
 /** 取得目前登入的帳號（Drive about；只需 drive.appdata 權限） */
@@ -44,7 +44,7 @@ async function findId(name) {
 
 /** 備份到 Drive */
 export async function pushRemote() {
-  if (!ready()) { emit('Google Drive 需要重新連線（點此重新連線）', 'need-auth'); return false; }
+  if (!ready()) { emit('Google Drive 需要重新登入（點這裡）', 'need-auth'); return false; }
   try {
     const data = JSON.stringify(S);
     if (!fid) fid = await findId(FN);
@@ -58,10 +58,10 @@ export async function pushRemote() {
       fid = (await r.json()).id;
     }
     L.lastBackup = Date.now(); commitLocal();
-    emit('已備份到 Google Drive', 'pushed');
+    emit('已存到 Google Drive', 'pushed');
     return true;
   } catch (e) {
-    emit(e.message === 'auth' ? 'Google Drive 需要重新連線（點此重新連線）' : 'Drive 備份失敗，資料仍在本機（點此重新連線）', 'push-failed');
+    emit(e.message === 'auth' ? 'Google Drive 需要重新登入（點這裡）' : '存到 Google Drive 失敗，資料還在手機裡（點這裡重新登入）', 'push-failed');
     return false;
   }
 }
@@ -92,18 +92,18 @@ async function pullAndMerge() {
 
 /** interactive：使用者按按鈕；chooseAccount：強制顯示帳號選擇畫面 */
 export function connect(interactive, chooseAccount) {
-  if (!window.google || !google.accounts || !google.accounts.oauth2) { emit('Google 登入元件尚未載入，請稍後再試', 'error'); return; }
+  if (!window.google || !google.accounts || !google.accounts.oauth2) { emit('Google 登入還沒準備好，請等幾秒再試', 'error'); return; }
   if (!tc) tc = google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_CLIENT_ID, scope: SCOPE,
     callback: async r => {
-      if (r.error || !r.access_token) { emit('Google 連線失敗（點此重新連線）', 'need-auth'); return; }
+      if (r.error || !r.access_token) { emit('Google 登入失敗（點這裡重試）', 'need-auth'); return; }
       tok = r.access_token; tokExp = Date.now() + (r.expires_in || 3600) * 1000;
       L.driveLinked = true; commitLocal();
       await fetchAccount();
-      try { await pullAndMerge(); } catch (e) { emit('Drive 同步失敗，資料仍在本機（點此重新連線）', 'push-failed'); }
+      try { await pullAndMerge(); } catch (e) { emit('和 Google Drive 同步失敗，資料還在手機裡（點這裡重新登入）', 'push-failed'); }
       emit(null, 'linked');
     },
-    error_callback: () => emit('Google Drive 需要重新連線（點此重新連線）', 'need-auth'),
+    error_callback: () => emit('Google Drive 需要重新登入（點這裡）', 'need-auth'),
   });
   const opt = { prompt: !interactive ? 'none' : (chooseAccount || !L.driveEmail ? 'select_account' : '') };
   if (L.driveEmail && !chooseAccount) opt.hint = L.driveEmail;
@@ -113,21 +113,21 @@ export function connect(interactive, chooseAccount) {
 export function disconnect() {
   try { if (tok && window.google) google.accounts.oauth2.revoke(tok); } catch (e) { /* 忽略 */ }
   tok = null; fid = null; L.driveLinked = false; L.driveEmail = ''; commitLocal();
-  emit('本機儲存（已中斷 Google Drive）', 'unlinked');
+  emit('只存在這支手機（已中斷 Google Drive）', 'unlinked');
 }
 
 /** 立即同步（已連線時） */
 export async function syncNow() {
   if (!ready()) { connect(true); return; }
   emit('同步中…');
-  try { await pullAndMerge(); } catch (e) { emit('Drive 同步失敗，資料仍在本機', 'push-failed'); }
+  try { await pullAndMerge(); } catch (e) { emit('和 Google Drive 同步失敗，資料還在手機裡', 'push-failed'); }
 }
 
 /** 只讀取同步版的備份檔（不寫入、不修改、不刪除） */
 export async function readSyncBackup() {
   if (!ready()) throw new Error('請先連線 Google Drive');
   const id = await findId(SYNC_FN);
-  if (!id) throw new Error('在你的 Google Drive 找不到同步版的備份（' + SYNC_FN + '）。請確認同步版有連線同一個 Google 帳號並備份過。');
+  if (!id) throw new Error('在你的 Google Drive 找不到同步版的存檔（' + SYNC_FN + '）。請確認同步版有登入同一個 Google 帳號，並且存過檔。');
   return await (await gfetch(API + '/' + id + '?alt=media')).json();
 }
 
@@ -140,7 +140,7 @@ export function initDrive() {
   const tryConnect = (n = 0) => {
     if (window.google && google.accounts && google.accounts.oauth2) connect(false);
     else if (n < 20) setTimeout(() => tryConnect(n + 1), 500);
-    else emit('Google 登入元件載入失敗，資料仍在本機', 'error');
+    else emit('Google 登入載入失敗，資料還在手機裡', 'error');
   };
   tryConnect();
 }

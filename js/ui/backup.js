@@ -25,7 +25,7 @@ export function backupCard() {
     if (pf.targetWeight) pl.push('目標體重 ' + pf.targetWeight + ' kg');
     if (pf.halfLife) pl.push('半衰期 ' + pf.halfLife + ' 小時');
     out.append(h('div', { style: { background: 'var(--soft)', borderRadius: '12px', padding: '10px 12px', lineHeight: 1.8 } },
-      h('div.small', h('b', '同步版備份：'), source),
+      h('div.small', h('b', '同步版存檔：'), source),
       h('div.small', '共 ' + pv.total + ' 筆' + (pv.from ? '（' + pv.from + ' ～ ' + pv.to + '）' : '')),
       h('div.small', '新增 ', h('b', pv.add.length), ' 筆・更新 ', h('b', pv.update.length), ' 筆・已存在略過 ', pv.dup, ' 筆' + (pv.bad ? '・日期格式錯誤略過 ' + pv.bad + ' 筆' : '')),
       pl.length ? h('div.small', '個人資料：' + pl.join('、')) : null));
@@ -50,9 +50,9 @@ export function backupCard() {
   const sw = h('button.ghost', { type: 'button', onclick: () => { disconnect(); connect(true, true); } }, '切換帳號');
   const off = h('button.ghost', { type: 'button', onclick: () => { disconnect(); draw(); } }, '中斷連線');
   const acctBtns = h('div.grid2', { style: { marginTop: '8px' } }, sw, off);
-  const fromDrive = h('button.ghost.full', { type: 'button', style: { marginTop: '8px' } }, '從 Google Drive 匯入同步版');
+  const fromDrive = h('button.ghost.full', { type: 'button', style: { marginTop: '8px' } }, '從 Google Drive 匯入同步版存檔');
   fromDrive.onclick = async () => {
-    if (!ready()) { out.textContent = ''; out.append(h('div.notice', '請先連線 Google Drive（和同步版同一個帳號），再按一次。')); return; }
+    if (!ready()) { out.textContent = ''; out.append(h('div.notice', '請先按上面的「連線 Google Drive」，登入和同步版同一個 Google 帳號，再按一次。')); return; }
     fromDrive.disabled = true; out.textContent = ''; out.append(h('div.row.small.mu', h('span.spin'), '讀取中…'));
     try { showSync(parseSyncBackup(await readSyncBackup()), 'Google Drive'); }
     catch (e) { out.textContent = ''; out.append(h('div.notice', e.message === 'auth' ? 'Google Drive 需要重新連線。' : '讀取失敗：' + e.message)); }
@@ -60,14 +60,14 @@ export function backupCard() {
   };
 
   /* ---------- 其他：文字或檔案 ---------- */
-  const ta = h('textarea', { rows: 3, placeholder: '貼上 MetaPulse 或同步版的備份文字' });
+  const ta = h('textarea', { rows: 3, placeholder: '貼上 MetaPulse 或同步版的存檔文字' });
   const file = h('input', { type: 'file', accept: '.json,.txt,application/json,text/plain' });
   const msg = h('div.mu.small', { style: { marginTop: '6px' } });
   let confirmRestore = 0;
   const handle = (text, source) => {
     msg.textContent = ''; out.textContent = '';
     let p;
-    try { p = JSON.parse(String(text).replace(/```(json)?/g, '').trim()); } catch (e) { msg.textContent = '看不懂這段內容，請貼上完整的備份文字。'; return; }
+    try { p = JSON.parse(String(text).replace(/```(json)?/g, '').trim()); } catch (e) { msg.textContent = '看不懂這段內容，請確認貼上的是完整的存檔文字（從 { 開頭到 } 結尾）。'; return; }
     if (p && Array.isArray(p.meals)) {             // MetaPulse 自己的備份 → 還原（取代全部）
       if (Date.now() - confirmRestore > 5000) {
         confirmRestore = Date.now();
@@ -86,27 +86,29 @@ export function backupCard() {
     const f = file.files && file.files[0]; file.value = ''; if (!f) return;
     try { const t = await f.text(); ta.value = t; handle(t, '檔案「' + f.name + '」'); } catch (e) { msg.textContent = '讀取檔案失敗。'; }
   };
-  const gen = h('button.ghost', { type: 'button', onclick: () => { ta.value = JSON.stringify(S); ta.select(); L.lastBackup = Date.now(); commitLocal(); draw(); msg.textContent = '已產生（' + S.entries.length + ' 筆身體記錄、' + S.meals.length + ' 筆餐點），請全選複製另存。'; } }, '產生備份文字');
+  const gen = h('button.ghost', { type: 'button', onclick: () => { ta.value = JSON.stringify(S); ta.select(); L.lastBackup = Date.now(); commitLocal(); draw(); msg.textContent = '已產生（' + S.entries.length + ' 筆身體記錄、' + S.meals.length + ' 筆餐點），請全選、複製後另外保存。'; } }, '產生存檔文字');
   const use = h('button.ghost', { type: 'button', onclick: () => { if (ta.value.trim()) handle(ta.value, '貼上的文字'); else ta.focus(); } }, '匯入或還原');
 
   function draw() {
     const em = driveEmail();
-    sumEl.textContent = (linked() ? 'Google Drive：' + (em || '已連線') + '・' + driveStatus().replace(/（點此.*?）/, '') + (L.lastBackup ? '（' + ago(L.lastBackup) + '）' : '') : 'Google Drive 尚未連線')
+    sumEl.textContent = (linked() ? 'Google Drive：' + (em || '已連線') + '・' + driveStatus().replace(/（點這裡.*?）/, '') + (L.lastBackup ? '（' + ago(L.lastBackup) + '）' : '') : 'Google Drive 尚未連線')
       + (L.lastSyncImport ? '・同步版 ' + fmtAt(L.lastSyncImport.at) + ' 匯入' : '');
-    acct.textContent = linked() ? '帳號：' + (em || '（重新連線後顯示）') + '・' + driveStatus().replace(/（點此.*?）/, '') : '連線後，每次修改都會自動備份到你自己的 Google Drive。';
-    main.textContent = linked() ? (ready() ? '立即同步' : '重新連線 Google Drive') : '連線 Google Drive';
+    acct.textContent = linked() ? '帳號：' + (em || '（按「重新登入」後顯示）') + '・' + driveStatus().replace(/（點這裡.*?）/, '') : '連線後，每次修改記錄都會自動存一份到你自己的 Google Drive（雲端硬碟）。';
+    main.textContent = linked() ? (ready() ? '立即同步' : '重新登入 Google Drive') : '連線 Google Drive';
     acctBtns.style.display = linked() ? '' : 'none';
   }
   onDrive(() => { if (sumEl.isConnected) draw(); });
   draw();
 
   const body = [
-    sub('Google', true), acct, main, acctBtns, fromDrive,
-    h('div.mu.tiny', { style: { marginTop: '8px', lineHeight: 1.6 } }, '備份檔存在你 Drive 的隱藏應用程式資料夾，只有這個 app 能讀寫，作者看不到；本機與雲端以最後修改時間較新的為準。從 Drive 匯入同步版只會讀取，不會改動同步版。'),
-    sub('其他（文字或檔案）'),
+    sub('Google', true), acct, main, acctBtns,
+    h('div.mu.tiny', { style: { marginTop: '8px', lineHeight: 1.6 } }, 'MetaPulse 的存檔會放在你 Google Drive 裡一個看不到的專用資料夾，只有這個 app 能讀寫，別人（包括作者）都看不到。手機和雲端的存檔，以比較新的那份為準。'),
+    fromDrive,
+    h('div.mu.tiny', { style: { marginTop: '8px', lineHeight: 1.6 } }, '「同步版」是你之前用的「注射與體重記錄 同步版」app。按上面的按鈕，可以把它存在 Google Drive 的記錄搬過來；只會讀取，不會改動同步版，可以重複按，不會重複加入。'),
+    sub('其他：用文字或檔案存檔、搬資料'),
     ta, h('div.grid2', { style: { marginTop: '8px' } }, gen, use),
-    h('label', '或選擇備份檔（.json 或 .txt）'), file, msg,
-    h('div.mu.tiny', { style: { marginTop: '6px', lineHeight: 1.6 } }, '貼上或選擇後會自動判斷：MetaPulse 的備份會還原（取代全部資料，需再確認一次）；同步版的備份會匯入（只新增或更新，可重複執行）。'),
+    h('label', '或選擇存檔檔案（.json 或 .txt）'), file, msg,
+    h('div.mu.tiny', { style: { marginTop: '6px', lineHeight: 1.6 } }, '「產生存檔文字」會把全部記錄變成一段文字，可以複製貼到記事本或傳給自己保存。貼上或選擇檔案後，app 會自動判斷：MetaPulse 的存檔會「還原」（用它取代現在全部的資料，要再按一次確認）；同步版的存檔會「匯入」（只加入新的記錄，可以重複做）。'),
     out,
   ];
   return section('backup', '備份與匯入', sumEl, body, !linked() || !S.entries.length);

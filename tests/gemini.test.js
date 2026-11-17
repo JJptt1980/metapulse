@@ -45,7 +45,7 @@ test('金鑰錯誤（403）不重試，直接回報', async () => {
 });
 
 test('沒有 key 時提示', async () => {
-  await assert.rejects(analyzeMeal({ key: '', model: 'm', text: 'x' }), /API key/);
+  await assert.rejects(analyzeMeal({ key: '', model: 'm', text: 'x' }), /API 金鑰/);
 });
 
 test('速度優先：送出 thinking_level minimal；不支援時自動拿掉再試', async () => {

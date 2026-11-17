@@ -48,11 +48,11 @@ export function openAddMeal(o = {}) {
     const showErr = (e) => {
       status.textContent = '';
       const msg = e.name === 'AbortError' ? '已取消。' : '辨識失敗：' + (e.message || e);
-      status.append(h('div.notice', msg, e.name === 'AbortError' ? '' : h('div.tiny.mu', { style: { marginTop: '4px' } }, '可以改用文字描述、常用食物，或下方「完全手動新增」。')));
+      status.append(h('div.notice', msg, e.name === 'AbortError' ? '' : h('div.tiny.mu', { style: { marginTop: '4px' } }, '可以改用文字描述、常用食物，或下方「自己輸入一項」。')));
     };
 
     async function runAI(args) {
-      if (!L.geminiKey) { status.textContent = ''; status.append(h('div.notice', '還沒設定 Gemini API key。請到「設定」→「AI 辨識」輸入。')); return; }
+      if (!L.geminiKey) { status.textContent = ''; status.append(h('div.notice', '還沒設定 AI 的 API 金鑰。請到「設定」→「AI 辨識食物」輸入。')); return; }
       busy?.abort(); busy = new AbortController();
       const t0 = Date.now(), label = args.image ? '辨識照片中…' : '估算中…';
       setBusy(label);
@@ -96,7 +96,7 @@ export function openAddMeal(o = {}) {
             h('button.pri', { type: 'button', onclick: () => cam.click() }, icon('camera'), ' 拍照'),
             h('button.ghost', { type: 'button', onclick: () => pick.click() }, icon('image'), ' 選照片')),
           h('div', { style: { marginTop: '8px' } }, hint), cam, pick, prev,
-          h('div.mu.tiny', { style: { marginTop: '6px' } }, '照片只送到 Google Gemini 辨識，不會存在 app 裡' + (L.keepThumbs ? '（只留 200px 縮圖）' : '') + '。'));
+          h('div.mu.tiny', { style: { marginTop: '6px' } }, '照片只送到 Google Gemini 辨識，不會存在 app 裡' + (L.keepThumbs ? '（只留一張小照片）' : '') + '。'));
       } else if (mode === 'text') {
         const ta = h('textarea', { rows: 2, placeholder: '例如：一碗牛肉麵加滷蛋、一杯無糖豆漿' });
         const go = h('button.pri.full', { type: 'button', onclick: () => { const t = ta.value.trim(); if (t) runAI({ text: t }); else ta.focus(); } }, '估算');
@@ -112,7 +112,7 @@ export function openAddMeal(o = {}) {
     function drawItems() {
       itemsBox.textContent = '';
       if (thumb) itemsBox.append(h('div.row', { style: { marginBottom: '8px' } }, h('img.thumb', { src: thumb, alt: '' }),
-        h('button.link.small', { type: 'button', onclick: () => { thumb = undefined; drawItems(); } }, '不保留縮圖')));
+        h('button.link.small', { type: 'button', onclick: () => { thumb = undefined; drawItems(); } }, '不保留照片')));
       items.forEach((it, i) => {
         itemsBox.append(itemCard(it, {
           foldKey: 'meal-editor', onChange: updateTotal,
@@ -125,7 +125,7 @@ export function openAddMeal(o = {}) {
     }
 
     async function reanalyze(i, text, btn) {
-      if (!L.geminiKey) { toast('還沒設定 Gemini API key', true); return; }
+      if (!L.geminiKey) { toast('還沒設定 AI 的 API 金鑰', true); return; }
       const it = items[i];
       const useImg = it.source === 'ai-photo' && lastImage;
       btn.disabled = true; btn.textContent = '辨識中…';
@@ -144,10 +144,10 @@ export function openAddMeal(o = {}) {
 
     function updateTotal() {
       const ts = items.map(itemTotals);
-      const pts = ts.reduce((a, t) => a + t.points, 0), kcal = ts.reduce((a, t) => a + t.kcal, 0), pro = ts.reduce((a, t) => a + t.protein, 0);
+      const pts = ts.reduce((a, t) => a + t.points, 0), 大卡 = ts.reduce((a, t) => a + t.kcal, 0), pro = ts.reduce((a, t) => a + t.protein, 0);
       saveBtn.disabled = !items.length;
       saveBtn.textContent = items.length ? (editing ? '儲存變更' : '加入這一餐') + '（' + fmtPts(pts) + ' 點）' : '先拍照、描述或選擇食物';
-      totalTxt.textContent = items.length ? '本餐點數 ' + fmtPts(pts) + ' 點 · ' + Math.round(kcal) + ' kcal · 蛋白質 ' + r1(pro) + ' g' : '';
+      totalTxt.textContent = items.length ? '本餐點數 ' + fmtPts(pts) + ' 點 · ' + Math.round(大卡) + ' 大卡 · 蛋白質 ' + r1(pro) + ' g' : '';
     }
 
     saveBtn.onclick = () => {
@@ -169,12 +169,12 @@ export function openAddMeal(o = {}) {
       const ok = commit();
       closeSheet();
       if (ok) requestAdvice(group);
-      toast(ok ? (editing ? '已更新這一餐' : '已加入，' + fmtPts(items.reduce((a, it) => a + itemTotals(it).points, 0)) + ' 點') : '儲存失敗：本機空間不足', !ok);
+      toast(ok ? (editing ? '已更新這一餐' : '已加入，' + fmtPts(items.reduce((a, it) => a + itemTotals(it).points, 0)) + ' 點') : '儲存失敗：手機空間不夠', !ok);
     };
 
     drawTabs();
     sh.append(tabs, inputArea, status, itemsBox,
-      h('button.link.small', { type: 'button', onclick: () => { items.push(blankItem()); drawItems(); itemsBox.lastChild?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }, icon('plus'), ' 完全手動新增一項'),
+      h('button.link.small', { type: 'button', onclick: () => { items.push(blankItem()); drawItems(); itemsBox.lastChild?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }, icon('plus'), ' 自己輸入一項'),
       h('div.foot', h('label', { style: { marginTop: 0 } }, '用餐時間'), whenIn, saveBtn, totalTxt));
     if (editing) {
       const del = h('button.danger.full', { type: 'button' }, icon('trash'), ' 刪除這一餐');

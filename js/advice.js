@@ -40,7 +40,7 @@ export function adviceContext(meals, b, u, now = new Date()) {
 /** 沒有 AI（未設定 key 或呼叫失敗）時的簡單回饋 */
 export function fallbackAdvice(ctx, rand = Math.random) {
   const m = ctx.這一餐合計, g = ctx.目標;
-  const review = '這一餐約 ' + m.點數 + ' 點、' + m.熱量kcal + ' kcal，蛋白質 ' + m.蛋白質g + ' g。'
+  const review = '這一餐約 ' + m.點數 + ' 點、' + m.熱量kcal + ' 大卡，蛋白質 ' + m.蛋白質g + ' g。'
     + (m.蛋白質g >= 25 ? '蛋白質很充足。' : m.蛋白質g >= 15 ? '蛋白質還不錯。' : '');
   let next = '';
   if (g) {

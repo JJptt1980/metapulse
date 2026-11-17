@@ -15,7 +15,7 @@ function stat(label, value, unit) {
 
 /* ---------- 輸入面板 ---------- */
 const GROUPS = {
-  wt: { title: '體重計／體脂機', fields: [['wt', '體重', 'kg', 0.1], ['fat', '體脂率', '%', 0.1], ['mus', '骨骼肌率', '%', 0.1], ['vis', '內臟脂肪等級', '', 0.5], ['bage', '身體年齡', '歲', 1], ['bmr', '基礎代謝', 'kcal', 1]] },
+  wt: { title: '體重計／體脂計', fields: [['wt', '體重', 'kg', 0.1], ['fat', '體脂率', '%', 0.1], ['mus', '骨骼肌率', '%', 0.1], ['vis', '內臟脂肪等級', '', 0.5], ['bage', '身體年齡', '歲', 1], ['bmr', '基礎代謝', '大卡', 1]] },
   bp: { title: '血壓計', fields: [['sys', '收縮壓', 'mmHg', 1], ['dia', '舒張壓', 'mmHg', 1], ['pul', '脈搏', '次/分', 1]] },
   dose: { title: '注射', fields: [['dose', '劑量', 'mg', 0.1]] },
 };
@@ -44,7 +44,7 @@ export function openEntry(o = {}) {
       const parts = [grid];
       if (t === 'dose') {
         const nd = nextDose(S.entries.filter(x => !ed || x.id !== ed.id), localDate(new Date()));
-        siteSel = h('select', h('option', { value: '' }, '（未指定）'), ...SITES.map(s => h('option', { value: s }, s)));
+        siteSel = h('select', h('option', { value: '' }, '（不填）'), ...SITES.map(s => h('option', { value: s }, s)));
         siteSel.value = ed ? (e.site || '') : (nd ? nd.site : SITES[0]);
         parts.push(h('label', '注射部位'), siteSel);
       }
@@ -102,14 +102,14 @@ function scaleCard(es) {
   const summary = (w ? w.wt + ' kg' : '–') + (b ? '・BMI ' + r1(b.value) + '（' + b.label + '）' : '') + (w && tw ? (w.wt > tw ? '・距目標 ' + r1(w.wt - tw) + ' kg' : '・已達目標') : '');
   const more = [];
   if (w) more.push(stat('體重 · ' + md(w.date), w.wt, 'kg'));
-  for (const [k, label, unit] of [['fat', '體脂率', '%'], ['mus', '骨骼肌率', '%'], ['vis', '內臟脂肪', ''], ['bage', '身體年齡', '歲'], ['bmr', '基礎代謝', 'kcal']]) {
+  for (const [k, label, unit] of [['fat', '體脂率', '%'], ['mus', '骨骼肌率', '%'], ['vis', '內臟脂肪', ''], ['bage', '身體年齡', '歲'], ['bmr', '基礎代謝', '大卡']]) {
     const x = lastOf(es, y => y[k] > 0);
     if (x) more.push(stat(label + ' · ' + md(x.date), x[k], unit));
   }
   const lm = lastOf(es, y => y.wt > 0 && y.fat > 0);
   if (lm) more.push(stat('淨體重 · ' + md(lm.date), r1(leanMass(lm)), 'kg'));
   const body = h('div', { style: { marginTop: '10px' } }, h('div.grid3', { style: { rowGap: '12px' } }, ...more),
-    !S.profile.height ? h('div.mu.tiny', { style: { marginTop: '6px' } }, '在設定填身高後可顯示 BMI。') : null);
+    !S.profile.height ? h('div.mu.tiny', { style: { marginTop: '6px' } }, '在設定填身高後，可以顯示 BMI（身體質量指數）。') : null);
   return deviceCard('dev-scale', '體重計', summary, addBtn('wt', '記錄'), body);
 }
 
@@ -135,9 +135,9 @@ export function doseCard(compact) {
     h('div.grid3',
       stat('建議部位', nd.site),
       stat('最近一次 · ' + md(nd.last.date), nd.last.dose, 'mg'),
-      stat('預估體內殘留', r1(ob), 'mg')),
+      stat('預估體內藥量', r1(ob), 'mg')),
     h('button' + (due ? '.pri' : '.ghost') + '.full', { type: 'button', onclick: () => openEntry({ type: 'dose' }) }, '記錄這次注射'),
-    h('div.mu.tiny', { style: { marginTop: '6px' } }, '殘留量依半衰期簡化估算，只看趨勢，不能用來決定劑量。'));
+    h('div.mu.tiny', { style: { marginTop: '6px' } }, '體內藥量是用藥物半衰期粗略算的，只用來看變化，不是驗血結果，不能用來決定劑量。'));
   let force = false;
   if (due && L.doseForced !== nd.due + (compact ? 't' : 'l')) { force = true; L.doseForced = nd.due + (compact ? 't' : 'l'); commitLocal(); }
   return deviceCard('dose-card', '注射', line, null, body, { force, accent: due });
@@ -169,7 +169,7 @@ function row(e) {
       noteText(e) ? h('div.mu.tiny', noteText(e)) : null));
 }
 
-const TYPE_NAMES = { all: '全部', dose: '注射', wt: '體重', bp: '血壓', bc: '體組成' };
+const TYPE_NAMES = { all: '全部', dose: '注射', wt: '體重', bp: '血壓', bc: '身體組成' };
 const RECENT_LIMIT = 5;
 let showAllRecent = false;
 
@@ -184,9 +184,9 @@ function listCard(all) {
   const months = [...byMon.keys()].sort().reverse();
   const jump = h('select', { 'aria-label': '跳到月份' }, h('option', { value: '' }, '跳到月份…'), ...months.map(k => h('option', { value: k }, k.slice(0, 4) + ' 年 ' + +k.slice(5) + ' 月')));
   card.append(h('h2', '記錄列表'));
-  if (!all.length) { card.append(h('div.empty', '還沒有記錄。可以從上面的卡片新增，或到設定「從同步版匯入」。')); return card; }
+  if (!all.length) { card.append(h('div.empty', '還沒有記錄。可以按上面卡片的「＋記錄」新增，或到「設定」→「備份與匯入」把同步版的記錄搬過來。')); return card; }
   card.append(fold('log-filter', h('span.small.mu', TYPE_NAMES[type] + '・' + (sort === 'desc' ? '新到舊' : '舊到新') + '・符合 ' + rows.length + ' 筆'), [h('div', { style: { marginTop: '8px' } },
-    pills([['all', '全部'], ['dose', '注射'], ['wt', '體重'], ['bp', '血壓'], ['bc', '體組成']], type, v => { L.logType = v; commitLocal(); rerender(); }),
+    pills([['all', '全部'], ['dose', '注射'], ['wt', '體重'], ['bp', '血壓'], ['bc', '身體組成']], type, v => { L.logType = v; commitLocal(); rerender(); }),
     h('div.row', { style: { marginTop: '8px' } }, pills([['desc', '新到舊'], ['asc', '舊到新']], sort, v => { L.logSort = v; commitLocal(); rerender(); }), h('div.grow'),
       months.length ? h('div', { style: { width: '140px' } }, jump) : null))]));
   if (!rows.length) { card.append(h('div.empty', '沒有符合條件的記錄。')); return card; }

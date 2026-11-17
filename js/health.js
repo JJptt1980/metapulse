@@ -99,9 +99,9 @@ export function applyHealth(S, plan, uid) {
 /** 實際向 Health Connect 讀取 */
 export async function readHealth(days) {
   const H = healthPlugin();
-  if (!H) throw new Error('找不到 Health Connect 外掛。這個功能只能在 MetaPulse 的 Android APK 中使用。');
+  if (!H) throw new Error('這個功能只能在 Maple 手機 app（APK）裡使用。');
   const av = await H.isAvailable();
-  if (!av || !av.available) throw new Error('此裝置無法使用 Health Connect：' + ((av && av.reason) || '未安裝或不支援'));
+  if (!av || !av.available) throw new Error('這支手機不能使用 Health Connect：' + ((av && av.reason) || '沒有安裝或不支援'));
   const types = ['weight', 'bodyFat', 'bloodPressure', 'basalCalories', 'heartRate', 'calories'];
   const au = await H.requestAuthorization({ read: types, write: [], requestHistoryAccess: days > 30 });
   const denied = (au && au.readDenied) || [];

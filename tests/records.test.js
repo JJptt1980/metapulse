@@ -88,7 +88,7 @@ test('沒有 sid 的舊資料用內容判斷重複', () => {
 
 test('拒絕 MetaPulse 自己的備份與錯誤內容', () => {
   assert.throws(() => parseSyncBackup('{"entries":[],"meals":[]}'), /MetaPulse/);
-  assert.throws(() => parseSyncBackup('hello'), /不是有效/);
+  assert.throws(() => parseSyncBackup('hello'), /看不懂/);
 });
 
 test('個人資料沒變時不算新資料', () => {

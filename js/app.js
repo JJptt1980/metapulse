@@ -47,8 +47,8 @@ drawSync(driveStatus());
 syncEl.onclick = () => { if (linked() && !ready()) connect(true); };
 onDrive((t, ev) => {
   drawSync(t);
-  if (ev === 'pushed') toast('✓ 已備份到 Google Drive');
-  if (ev === 'push-failed') toast('✗ 備份失敗，資料仍在本機', true);
+  if (ev === 'pushed') toast('✓ 已存到 Google Drive');
+  if (ev === 'push-failed') toast('✗ 存到雲端失敗，資料還在手機裡', true);
   if (ev === 'pulled') toast('已從 Google Drive 載入');
 });
 
@@ -60,9 +60,9 @@ function askBackup() {
   if (!S.entries.length && !S.meals.length) return;
   const el = $('bk-ask');
   el.textContent = '';
-  el.append(h('div', { style: { fontWeight: 600 } }, linked() ? '資料已更新，但 Google Drive 需要重新連線。要現在備份嗎？' : '資料已更新。要備份到 Google Drive 嗎？'),
+  el.append(h('div', { style: { fontWeight: 600 } }, linked() ? '記錄改好了，但 Google Drive 要重新登入才能存檔。要現在登入嗎？' : '記錄改好了。要存一份到 Google Drive（雲端硬碟）嗎？'),
     h('div.grid2', { style: { marginTop: '10px' } },
-      h('button.pri', { type: 'button', onclick: () => { el.style.display = 'none'; connect(true); } }, linked() ? '重新連線並備份' : '連線並備份'),
+      h('button.pri', { type: 'button', onclick: () => { el.style.display = 'none'; connect(true); } }, linked() ? '重新登入並存檔' : '連線並存檔'),
       h('button.ghost', { type: 'button', onclick: () => { el.style.display = 'none'; } }, '先不要')));
   el.style.display = 'block';
 }

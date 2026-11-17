@@ -37,7 +37,7 @@ export function markUsed(item) {
   f.lastUnit = item.unit; f.lastQty = item.qty;
 }
 
-const perLine = f => describe(f) + ' · ' + Math.round(f.per.kcal) + ' kcal · ' + pointsOf(scale(f.per, 1)) + ' 點／份';
+const perLine = f => describe(f) + ' · ' + Math.round(f.per.kcal) + ' 大卡 · ' + pointsOf(scale(f.per, 1)) + ' 點／份';
 
 /** 搜尋框 + 即時篩選清單；選了就呼叫 onPick(food) */
 export function foodPicker(onPick, { limit = 30, manage = false } = {}) {
@@ -47,7 +47,7 @@ export function foodPicker(onPick, { limit = 30, manage = false } = {}) {
   const draw = () => {
     list.textContent = '';
     const hits = searchFoods(S.foodLibrary, q.value);
-    if (!S.foodLibrary.length) { list.append(h('div.empty', '還沒有常用食物。加入餐點時展開「檢視與微調營養素」，按「記住這個食物」就會出現在這裡。')); return; }
+    if (!S.foodLibrary.length) { list.append(h('div.empty', '還沒有常用食物。記一餐時點開「檢視與微調營養素」，按「記住這個食物」，下次就能直接從這裡加入。')); return; }
     if (!hits.length) { list.append(h('div.empty', '找不到「' + q.value + '」')); return; }
     for (const f of hits.slice(0, limit)) {
       const it = h('div.it', { onclick: () => onPick(f) },

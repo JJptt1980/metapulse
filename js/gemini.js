@@ -81,7 +81,7 @@ async function viaInteractions({ key, model, prompt, schema, image, signal, fast
   if (j?.errors?.length) throw new Error(j.errors[0].message || 'Gemini 回傳錯誤');
   let out = j?.output_text;
   if (!out) for (const s of j?.steps || []) if (s.type === 'model_output') for (const c of s.content || []) if (c.type === 'text') out = (out || '') + c.text;
-  if (!out) throw new Error('Gemini 沒有回傳內容');
+  if (!out) throw new Error('AI 沒有回覆內容，請再試一次');
   return out;
 }
 
@@ -94,7 +94,7 @@ async function viaGenerateContent({ key, model, prompt, schema, image, signal, f
     contents: [{ role: 'user', parts }], generationConfig,
   }, signal);
   const out = (j?.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
-  if (!out) throw new Error('Gemini 沒有回傳內容' + (j?.promptFeedback?.blockReason ? '（' + j.promptFeedback.blockReason + '）' : ''));
+  if (!out) throw new Error('AI 沒有回覆內容，請再試一次' + (j?.promptFeedback?.blockReason ? '（' + j.promptFeedback.blockReason + '）' : ''));
   return out;
 }
 
@@ -112,8 +112,8 @@ async function callApi(name, o) {
 
 /** 共用：送出 prompt（可附圖），依 schema 取回 JSON。自動模式下先試上次成功的 API。 */
 async function callJSON(o, prompt, schema) {
-  if (!o.key) throw new Error('請先在「設定」輸入 Gemini API key');
-  if (!o.model) throw new Error('請先在「設定」選擇模型');
+  if (!o.key) throw new Error('請先到「設定」輸入 AI 的 API 金鑰');
+  if (!o.model) throw new Error('請先到「設定」選擇 AI 模型');
   const t0 = Date.now();
   const api = o.api || 'auto';
   const args = { ...o, prompt, schema, fast: o.fast !== false };
@@ -129,7 +129,7 @@ async function callJSON(o, prompt, schema) {
     }
   }
   let parsed;
-  try { parsed = parseJSON(raw); } catch (e) { throw new Error('Gemini 回傳的不是有效 JSON'); }
+  try { parsed = parseJSON(raw); } catch (e) { throw new Error('AI 回覆的格式不正確，請再試一次'); }
   return { parsed, raw, api: used, ms: Date.now() - t0 };
 }
 
@@ -185,7 +185,7 @@ export const DEFAULT_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gem
 
 /** 向 Google 查詢這把 key 能用的模型（只留能產生文字的 Gemini 模型） */
 export async function listModels(key, signal) {
-  if (!key) throw new Error('請先輸入 API key');
+  if (!key) throw new Error('請先輸入 API 金鑰');
   const names = [];
   let token = '';
   for (let i = 0; i < 5; i++) {

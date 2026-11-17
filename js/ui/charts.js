@@ -63,13 +63,13 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
     const dm = {}; dsAll.forEach(e => { dm[e.date] = (dm[e.date] || 0) + e.dose; });
     for (let i = a; i <= b; i++) { const s2 = fromDn(i); labels.push(md(s2)); dts.push(s2); doses.push(dm[s2] || null); ob.push(+onBoard(all, i, HL).toFixed(2)); }
     sp.push({
-      id: 'd', title: '劑量與預估體內殘留', dates: dts,
-      note: '殘留量依半衰期以指數衰減估算，假設注射後立即吸收，僅供趨勢參考，不能用來決定劑量。',
+      id: 'd', title: '注射劑量與預估體內藥量', dates: dts,
+      note: '體內藥量是用藥物半衰期粗略算的（假設打完馬上吸收），只用來看變化，不能用來決定劑量。',
       extra: i => dsAll.filter(e => e.date === dts[i]).map(e => '注射 ' + e.dose + ' mg' + (e.site ? '（' + e.site + '）' : '')),
       cfg: {
         data: { labels, datasets: [
           { type: 'bar', label: '注射劑量 (mg)', data: doses, backgroundColor: dc, order: 2 },
-          { type: 'line', label: '預估殘留 (mg)', data: ob, borderColor: rc, backgroundColor: rc, pointRadius: 0, tension: 0.3, order: 1 }] },
+          { type: 'line', label: '預估體內藥量 (mg)', data: ob, borderColor: rc, backgroundColor: rc, pointRadius: 0, tension: 0.3, order: 1 }] },
         options: { maintainAspectRatio: false, plugins: { legend: leg() }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid(), beginAtZero: true } } },
       },
     });
@@ -87,7 +87,7 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
       if (bs.some(e => e.pul > 0)) d3.push(ln3('脈搏（日均）', dl.map(d => av(days[d], e => e.pul)), mu, { borderDash: [4, 3], pointRadius: 2 }));
       sp.push({
         id: 'bp', title: '血壓與脈搏', dates: dl,
-        note: bpv === 'ampm' ? '這段範圍內的血壓記錄都沒有量測時間，無法分早晚，已改為每日平均。' : '同一天多次量測取平均；提示框會顯示當天次數與範圍。',
+        note: bpv === 'ampm' ? '這段範圍內的血壓記錄都沒有量測時間，無法分早晚，已改為每日平均。' : '同一天量好幾次會取平均；手指按在圖上可以看當天量了幾次、最高最低。',
         extra: i => { const a = days[dl[i]], x = [a.length + ' 次量測']; if (a.length > 1) x.push('收縮壓 ' + rg(a, e => e.sys) + '，舒張壓 ' + rg(a, e => e.dia)); return x; },
         cfg: { type: 'line', data: { labels: dl.map(md), datasets: d3 }, options: opt },
       });
@@ -115,7 +115,7 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
   if (H && ws.length) {
     const m2 = (H / 100) ** 2;
     sp.push({
-      id: 'bmi', title: 'BMI', dates: ws.map(e => e.date), note: '依身高 ' + H + ' cm 計算。虛線為台灣成人標準的過重（24）與肥胖（27）界線。',
+      id: 'bmi', title: 'BMI', dates: ws.map(e => e.date), note: '依身高 ' + H + ' cm 計算。BMI＝體重 ÷ 身高²（公尺）。虛線是台灣成人標準：24 以上過重、27 以上肥胖。',
       extra: i => ['體重 ' + ws[i].wt + ' kg'],
       cfg: {
         type: 'line', data: { labels: ws.map(e => md(e.date)), datasets: [
@@ -141,7 +141,7 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
     const hg = bm.some(e => e.bage > 0), hr = bm.some(e => e.bmr > 0);
     const d2 = [];
     if (hg) d2.push(ln3('身體年齡（歲）', bm.map(e => e.bage > 0 ? e.bage : null), c3, { yAxisID: 'y' }));
-    if (hr) d2.push(ln3('基礎代謝 (kcal)', bm.map(e => e.bmr > 0 ? e.bmr : null), c4, { yAxisID: 'y1' }));
+    if (hr) d2.push(ln3('基礎代謝 (大卡)', bm.map(e => e.bmr > 0 ? e.bmr : null), c4, { yAxisID: 'y1' }));
     sp.push({
       id: 'bm', title: '身體年齡與基礎代謝', dates: bm.map(e => e.date),
       cfg: { type: 'line', data: { labels: bm.map(e => md(e.date)), datasets: d2 }, options: { maintainAspectRatio: false, plugins: { legend: leg() }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid(), display: hg, position: 'left' }, y1: { display: hr, position: 'right', grid: { drawOnChartArea: false } } } } },
@@ -170,14 +170,14 @@ export async function renderCharts(root) {
   live.forEach(c => c && c.destroy()); live = [];
   root.textContent = '';
   const any = S.entries.some(e => e.wt > 0 || e.dose > 0 || e.sys > 0 || e.fat > 0 || e.mus > 0 || e.vis > 0 || e.bage > 0 || e.bmr > 0);
-  if (!any) { root.append(h('div.card', h('div.empty', '還沒有可畫圖的資料。到「記錄」新增，或在設定「從同步版匯入」。'))); return; }
+  if (!any) { root.append(h('div.card', h('div.empty', '還沒有可以畫圖的資料。到「記錄」新增，或到「設定」→「備份與匯入」把同步版的記錄搬過來。'))); return; }
   const range = L.chartRange || 'all', bpv = L.chartBp || 'all';
   root.append(h('div.card', h('div.row.between', h('b.small', '範圍'), pills([['30', '近 30 天'], ['90', '近 90 天'], ['all', '全部']], range, v => { L.chartRange = v; commitLocal(); renderCharts(root); })),
     h('div.mu.tiny', { style: { marginTop: '6px' } }, '只影響圖表，不會刪除任何記錄。手指左右拖曳可查看當天數值。')));
-  const wait = h('div.card', h('div.row.small.mu', h('span.spin'), '載入圖表元件…'));
+  const wait = h('div.card', h('div.row.small.mu', h('span.spin'), '正在準備圖表…'));
   root.append(wait);
   try { await loadChart(); } catch (e) {
-    wait.textContent = ''; wait.append(h('div.notice', '圖表元件載入失敗，請確認網路或 VPN 沒有擋住 cdnjs.cloudflare.com，然後重新整理頁面。')); return;
+    wait.textContent = ''; wait.append(h('div.notice', '畫圖的程式下載失敗。請確認有連上網路，再重新整理頁面。')); return;
   }
   wait.remove();
   const pal = palette();

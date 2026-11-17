@@ -4,7 +4,7 @@ import { unitsFor, convertQty, describe, itemTotals, fmtQty, tidy, UNIT_LABEL, f
 import { PORTION } from '../config.js';
 import { rememberFood } from './library.js';
 
-const NUT = [['kcal', '熱量', 'kcal'], ['protein', '蛋白質', 'g'], ['carb', '碳水', 'g'], ['fat', '脂肪', 'g'], ['fiber', '纖維', 'g']];
+const NUT = [['kcal', '熱量', '大卡'], ['protein', '蛋白質', 'g'], ['carb', '碳水', 'g'], ['fat', '脂肪', 'g'], ['fiber', '纖維', 'g']];
 const r1 = x => Math.round(x * 10) / 10;
 
 /**
@@ -111,11 +111,11 @@ export function itemCard(item, opts = {}) {
   function refresh() {
     const t = itemTotals(item);
     big.textContent = t.points + ' 點';
-    sub.textContent = fmtQty(t.finalQty, item.unit) + (item.unit !== 'serving' ? '（' + r1(t.servings) + ' 份）' : '') + ' · ' + Math.round(t.kcal) + ' kcal · 蛋白質 ' + r1(t.protein) + ' g';
+    sub.textContent = fmtQty(t.finalQty, item.unit) + (item.unit !== 'serving' ? '（' + r1(t.servings) + ' 份）' : '') + ' · ' + Math.round(t.kcal) + ' 大卡 · 蛋白質 ' + r1(t.protein) + ' g';
     conv.textContent = describe(item);
     sliderTxt.textContent = '';
     sliderTxt.append(h('span.mu', '× ' + (+item.slider).toFixed(2)), h('b.num', '最終 ' + fmtQty(t.finalQty, item.unit) + ' · ' + t.points + ' 點'));
-    totalsTxt.textContent = '本項合計：' + Math.round(t.kcal) + ' kcal · 蛋白質 ' + r1(t.protein) + ' g · 碳水 ' + r1(t.carb) + ' g · 脂肪 ' + r1(t.fat) + ' g · 纖維 ' + r1(t.fiber) + ' g';
+    totalsTxt.textContent = '本項合計：' + Math.round(t.kcal) + ' 大卡 · 蛋白質 ' + r1(t.protein) + ' g · 碳水 ' + r1(t.carb) + ' g · 脂肪 ' + r1(t.fat) + ' g · 纖維 ' + r1(t.fiber) + ' g';
     opts.onChange?.();
   }
   drawUnits(); syncInputs(); refresh();

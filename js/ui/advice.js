@@ -54,7 +54,7 @@ export function latestAdviceCard() {
     a.review ? h('p', { style: { margin: '10px 0 6px' } }, a.review) : null,
     a.next ? h('p', { style: { margin: '0 0 6px' } }, h('b', '下一餐　'), a.next) : null,
     h('div.row.between', { style: { marginTop: '6px' } },
-      h('span.mu.tiny', a.local ? '本機簡易建議（未使用 AI）' : 'AI 建議，僅供參考'),
+      h('span.mu.tiny', a.local ? '簡易建議（沒有使用 AI）' : 'AI 建議，僅供參考'),
       h('button.link.small', { type: 'button', onclick: () => requestAdvice(g) }, '換一個說法')),
   ];
   // 新的回饋自動展開一次，之後平常只顯示一句鼓勵

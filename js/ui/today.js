@@ -48,7 +48,7 @@ function mealRow(m) {
     m.thumb ? h('img.thumb', { src: m.thumb, alt: '' }) : null,
     h('div.grow',
       h('div', { style: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, m.items.map(i => i.name).join('、')),
-      h('div.mu.tiny.num', hm(m.at) + ' · ' + Math.round(m.kcal) + ' kcal · 蛋白質 ' + r1(m.protein) + ' g')),
+      h('div.mu.tiny.num', hm(m.at) + ' · ' + Math.round(m.kcal) + ' 大卡 · 蛋白質 ' + r1(m.protein) + ' g')),
     h('span.pts.num', fmtPts(m.points), h('span.mu.tiny', ' 點')));
 }
 
@@ -66,7 +66,7 @@ export function renderToday(root) {
   const top = h('div.card');
   if (!b.ok) {
     top.append(h('h2', '先填寫個人資料'),
-      h('div.mu.small', '需要身高、體重、出生年（或手動輸入基礎代謝），才能算出每日熱量與 7 天點數池。'),
+      h('div.mu.small', '需要身高、體重、出生年，才能算出每天大約可以吃多少（7 天點數額度）。'),
       h('button.ghost.full', { type: 'button', onclick: () => document.querySelector('nav.tabs button[data-t="set"]').click() }, '前往設定'));
   } else {
     const ex = exerciseRefund(S.activity, todayStr);
@@ -75,13 +75,13 @@ export function renderToday(root) {
     const over = left < 0;
     top.append(h('div.hero',
       h('div.ring', ring(pool ? Math.max(0, left) / pool : 0, over),
-        h('div.c', h('span.mu.tiny', over ? '超出' : '7 天剩'), h('b.num', fmtPts(Math.abs(left))), h('span.mu.tiny.num', '/ ' + fmtPts(pool) + ' 點'))),
+        h('div.c', h('span.mu.tiny', over ? '超出' : '7 天還剩'), h('b.num', fmtPts(Math.abs(left))), h('span.mu.tiny.num', '/ ' + fmtPts(pool) + ' 點'))),
       h('div',
-        metric('今日點數', u.today.points, b.floorPoints, '點', u.today.points < b.floorPoints ? '保底：提醒今天別吃太少，不是要求吃到' : '已達今日保底', false),
+        metric('今日點數', u.today.points, b.floorPoints, '點', u.today.points < b.floorPoints ? '保底＝提醒今天別吃太少，不是一定要吃到' : '已達今日保底', false),
         metric('蛋白質', u.today.protein, b.proteinTarget, 'g', null, false))));
     top.append(h('div.mu.tiny.num', { style: { marginTop: '10px' } },
-      '近 7 天（' + md(u.from) + '～今天）已用 ' + fmtPts(u.rolling) + ' 點 · 今日 ' + Math.round(u.today.kcal) + ' kcal'
-      + (ex.rolling ? ' · 運動回補 +' + fmtPts(ex.rolling) + ' 點' + (ex.todayKcal ? '（今天 ' + ex.todayKcal + ' kcal）' : '') : '')));
+      '近 7 天（' + md(u.from) + '～今天）已用 ' + fmtPts(u.rolling) + ' 點 · 今日 ' + Math.round(u.today.kcal) + ' 大卡'
+      + (ex.rolling ? ' · 運動加回 +' + fmtPts(ex.rolling) + ' 點' + (ex.todayKcal ? '（今天 ' + ex.todayKcal + ' 大卡）' : '') : '')));
   }
   top.append(h('button.pri.cta', { type: 'button', onclick: () => openAddMeal() }, icon('camera'), '記一餐'));
   root.append(top);

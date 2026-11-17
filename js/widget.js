@@ -11,7 +11,7 @@ const H = 3600000;
 export function widgetData(now = Date.now()) {
   const fi = fastInfo(now);
   // termBar：終端機小工具進度條的符號（滿／空／前後括號），改這裡就好，不用重裝 APK
-  const base = { msgs: WIDGET_MESSAGES, eating: WIDGET_EATING, updated: now, termBar: { full: '█', empty: '░', open: '[', close: ']' } };
+  const base = { msgs: WIDGET_MESSAGES, eating: WIDGET_EATING, updated: now, termBar: { full: '■', empty: '□', open: '[', close: ']' } };
   if (!fi.start) return { ...base, fasting: false, start: 0 };
   return { ...base, fasting: !!fi.fasting, start: fi.start, end: fi.end || 0,
     stages: stageStarts(fi.shift || 0).map((h, i) => ({ at: fi.start + h * H, text: FASTING.stages[i].short + '：' + FASTING.stages[i].text })) };

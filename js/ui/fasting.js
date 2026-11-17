@@ -124,6 +124,17 @@ function stageBarWithTarget(hours, shift, targetH) {
   return [bar, ticks];
 }
 
+/** 斷食現況（今日頁排順序用）：fasting＝正在斷食、reached＝已達目標 */
+export function fastInfo(now = Date.now()) {
+  const P = S.prefs, mode = P.fastMode || 'PURE_DYNAMIC';
+  const f = currentFast(S.meals, S.fasts, now, P.fastOverride);
+  if (!f.start) return { fasting: false, reached: false };
+  const tg = targetOf(mode, f, now), win = tg.win || null, ov = f.override;
+  const e = fastEnd(f.start, tg.hours, ov, now);
+  const fasting = !!((ov && Number.isFinite(ov.start)) || f.manual || (win ? !win.inWindow : f.hours >= FASTING.fastingFromHours));
+  return { fasting, reached: e.left <= 0, hours: f.hours, left: e.left };
+}
+
 export function fastingCard() {
   const now = Date.now();
   const P = S.prefs;
@@ -225,8 +236,8 @@ export function fastingCard() {
   sec.append(fold('fast-mode', h('span.small', h('b', '模式：' + MODE_NAME[mode]), h('span.mu', '・' + tg.label)), modeBody));
   body.append(sec);
 
-  let force = false;
-  if (fasting && L.fastForced !== f.start) { force = true; L.fastForced = f.start; commitLocal(); }
+  // 斷食中而且還沒達標：一直展開；其他時候收成一行（使用者自己開合的照舊記住）
+  const force = fasting && !over;
   card.append(fold('fast-card', h('div.grow', h('h2', { style: { margin: 0 } }, fasting ? '斷食中' : '斷食'), h('div.small.num', { style: { marginTop: '2px' } }, summary)), [body], { open: false, force }));
   return card;
 }

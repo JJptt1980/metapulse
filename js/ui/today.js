@@ -1,13 +1,16 @@
-/* 今日分頁：7 天點數池（環形）、保底與蛋白質進度、拍照按鈕、餐點列表 */
+/* 飲食分頁：存摺（環形）與今日剩餘、斷食、服藥、注射提醒、週報、餐點列表；卡片依現在最重要的事排順序 */
 import { S, L, plan, commitLocal } from '../state.js';
 import { backupReminder } from '../sync.js';
 import { connect, linked } from '../drive.js';
 import { h, icon, fold, hm, WD, fmtPts } from './common.js';
-import { usage, localDate, addDays, exerciseRefund } from '../points.js';
+import { usage, localDate, addDays } from '../points.js';
+import { ledger } from '../ledger.js';
+import { nextDose } from '../records.js';
+import { medCard } from './meds.js';
+import { weeklyCard } from './weekly.js';
 import { openAddMeal } from './addMeal.js';
 import { latestAdviceCard } from './advice.js';
-import { doseCard } from './log.js';
-import { fastingCard, longTermCard, leanCard } from './fasting.js';
+import { fastingCard, longTermCard, fastInfo } from './fasting.js';
 
 const r1 = x => Math.round(x * 10) / 10;
 
@@ -78,52 +81,78 @@ export function renderToday(root) {
       h('button.link.small', { type: 'button', onclick: goSet, style: { marginTop: '6px' } }, '或到「設定」→「備份與匯入」產生存檔文字')));
   }
 
-  /* ---- 頂部 ---- */
-  const top = h('div.card');
+  /* ---- 頂部：存摺（環形）＋今日剩餘 ---- */
+  const fi = fastInfo();
+  const fastFirst = fi.fasting && !fi.reached;          // 斷食中還沒達標：斷食卡排最上面，點數卡縮成一行
+  let top;
   if (!b.ok) {
-    top.append(h('h2', '先填寫個人資料'),
-      h('div.mu.small', '需要身高、體重、出生年，才能算出每天大約可以吃多少（7 天點數額度）。'),
+    top = h('div.card', h('h2', '先填寫個人資料'),
+      h('div.mu.small.one', '需要身高、體重、出生年，才能算出每天可以吃多少'),
       h('button.ghost.full', { type: 'button', onclick: () => document.querySelector('nav.tabs button[data-t="set"]').click() }, '前往設定'));
   } else {
-    const ex = exerciseRefund(S.activity, todayStr);
-    const pool = b.poolPoints + ex.rolling;
-    const left = pool - u.rolling;
-    const over = left < 0;
-    top.append(h('div.hero',
-      h('div.ring', ring(pool ? Math.max(0, left) / pool : 0, over),
-        h('div.c', h('span.mu.tiny', over ? '超出' : '7 天還剩'), h('b.num', fmtPts(Math.abs(left))), h('span.mu.tiny.num', '/ ' + fmtPts(pool) + ' 點'))),
-      h('div',
-        metric('今日／保底', u.today.points, b.floorPoints, '點', null, false),
-        metric('蛋白質', u.today.protein, b.proteinTarget, 'g', null, false))));
-    top.append(h('div.mu.tiny.num.one', { style: { marginTop: '10px' } },
-      '7 天用 ' + fmtPts(u.rolling) + ' 點・今日 ' + Math.round(u.today.kcal) + ' 大卡' + (ex.rolling ? '・運動 +' + fmtPts(ex.rolling) : '')));
+    const mode = S.prefs.weekStart || 'roll';
+    const lg = ledger(S.meals, S.activity, b.dailyPoints, todayStr, mode);
+    const td = lg.today, bal = lg.balance, total = lg.total;
+    const label = mode === 'roll' ? '7 天存摺' : '本週存摺';
+    if (fastFirst) {
+      top = h('div.card', h('div.row', { style: { gap: '10px' } },
+        h('div.grow', h('div.small.num.one', { style: { fontWeight: 650 } }, '今日剩餘 ' + fmtPts(td.left) + ' 點・' + label + ' ' + fmtPts(bal)),
+          h('div.mu.tiny.num.one', '今日 ' + Math.round(td.kcal) + ' 大卡・蛋白質 ' + Math.round(td.protein) + '／' + b.proteinTarget + ' g')),
+        h('button.pri', { type: 'button', style: { flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: '6px' }, onclick: () => openAddMeal() }, icon('camera'), '記一餐')));
+    } else {
+      const over = td.left < 0;
+      top = h('div.card');
+      top.append(h('div.hero',
+        h('div.ring', ring(total ? Math.max(0, bal) / total : 0, bal < 0),
+          h('div.c', h('span.mu.tiny', bal < 0 ? '存摺透支' : label), h('b.num', fmtPts(Math.abs(bal))), h('span.mu.tiny.num', '/ ' + fmtPts(total) + ' 點'))),
+        h('div',
+          h('div.metric',
+            h('div.row.between', h('span', '今日剩餘'), h('span.num', h('b', { style: { color: over ? 'var(--warn)' : '' } }, fmtPts(td.left)), h('span.mu', ' / ' + fmtPts(td.budget) + ' 點'))),
+            h('div.bar' + (over ? '.warn' : ''), h('i', { style: { width: Math.min(100, td.budget > 0 ? td.eaten / td.budget * 100 : 0) + '%' } }))),
+          metric('蛋白質', td.protein, b.proteinTarget, 'g', null, false))));
+      // 保底：晚上 8 點後還吃太少才提醒
+      const low = new Date().getHours() >= 20 && td.eaten > 0 && td.eaten < b.floorPoints;
+      top.append(h('div.mu.tiny.num.one', { style: { marginTop: '10px', color: low ? 'var(--warn)' : '' } },
+        low ? '今天只吃 ' + fmtPts(td.eaten) + ' 點，少於基本需要的 ' + b.floorPoints + ' 點，記得吃夠'
+          : '今日 ' + Math.round(td.kcal) + ' 大卡' + (td.refund ? '・運動 +' + fmtPts(td.refund) : '') + '・' + (over ? '超出的用存摺補' : '存摺越多，熱量赤字越大')));
+      top.append(h('button.pri.cta', { type: 'button', onclick: () => openAddMeal() }, icon('camera'), '記一餐'));
+    }
   }
-  top.append(h('button.pri.cta', { type: 'button', onclick: () => openAddMeal() }, icon('camera'), '記一餐'));
-  root.append(top);
-  const lc = leanCard();
-  if (lc) root.append(lc);
-  const lt = longTermCard();
-  if (lt) root.append(lt);
-  const dc = doseCard(true);
-  if (dc) root.append(dc);
-  root.append(fastingCard());
+
+  /* ---- 依「現在最重要的事」排順序 ---- */
+  const mc = medCard();
+  const nd = nextDose(S.entries, todayStr);
+  const doseLine = nd && nd.left <= 0 ? h('div.card', { style: { borderColor: 'var(--c1)', borderWidth: '2px', cursor: 'pointer' }, onclick: () => document.querySelector('nav.tabs button[data-t="log"]').click() },
+    h('div.row.between', h('b.one', nd.left === 0 ? '今天要注射・' + nd.site : '注射已逾期 ' + (-nd.left) + ' 天・' + nd.site), h('span', { style: { color: 'var(--c1)', fontWeight: 650, flex: '0 0 auto' } }, '去記錄 ›'))) : null;
+  if (mc && mc.urgent) root.append(mc.card);
+  if (doseLine) root.append(doseLine);
+  if (fastFirst) { root.append(fastingCard(), top); }
+  else { root.append(top, fastingCard()); }
+  if (mc && !mc.urgent) root.append(mc.card);
   const adv = latestAdviceCard();
   if (adv) root.append(adv);
+  const wk = weeklyCard();
+  if (wk) root.append(wk);
+  const lt = longTermCard();
+  if (lt) root.append(lt);
 
   /* ---- 餐點列表：今天展開；前 6 天每天一行；更早依月份收合 ---- */
   const groups = groupMeals(S.meals);
   const listCard = h('div.card');
   const todays = groups.filter(g => localDate(g.at) === todayStr);
-  listCard.append(h('div.row.between', h('h2', { style: { margin: 0 } }, '今日餐點'),
-    todays.length ? h('span.mu.small.num', todays.length + ' 餐 · ' + fmtPts(u.today.points) + ' 點') : null));
+  const head = h('div.row.between.grow', h('h2', { style: { margin: 0 } }, '今日餐點'),
+    todays.length ? h('span.mu.small.num', todays.length + ' 餐 · ' + fmtPts(u.today.points) + ' 點') : null);
   const tl = h('div.list', { style: { marginTop: '6px' } });
+  // 斷食中：餐點收成一行，點開才看
+  const tlWrap = fastFirst ? fold('meals-fasting', head, [tl], { open: false }) : null;
+  if (!tlWrap) listCard.append(head);
   const MEAL_LIMIT = 4;
   if (todays.length) {
     todays.slice(0, showAllMeals ? todays.length : MEAL_LIMIT).forEach(g => tl.append(mealRow(g)));
     if (!showAllMeals && todays.length > MEAL_LIMIT) tl.append(h('button.link.small', { type: 'button', onclick: () => { showAllMeals = true; renderToday(root); } }, '顯示今天全部（還有 ' + (todays.length - MEAL_LIMIT) + ' 餐）'));
   }
   else tl.append(h('div.empty', '今天還沒有記錄。按上方「記一餐」開始。'));
-  listCard.append(tl);
+  listCard.append(tlWrap || tl);
 
   const from7 = addDays(todayStr, -6);
   const recent = groups.filter(g => { const d = localDate(g.at); return d < todayStr && d >= from7; });

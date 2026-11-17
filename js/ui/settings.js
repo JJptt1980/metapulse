@@ -10,6 +10,8 @@ import { backupCard } from './backup.js';
 import { healthCard } from './health.js';
 import { omronCard } from './omron.js';
 import { dangerCard } from './reset.js';
+import { medsSettings } from './meds.js';
+import { WEEK_MODES } from '../ledger.js';
 
 const r1 = x => Math.round(x * 10) / 10;
 
@@ -53,7 +55,8 @@ export const legal = () => h('div.legal.mu.small', DISCLAIMER.map(t => h('p', t)
 
 export function applyTheme() {
   const de = document.documentElement;
-  if (L.theme === 'light' || L.theme === 'dark') de.setAttribute('data-theme', L.theme); else de.removeAttribute('data-theme');
+  const t = L.theme === 'auto' && !L.themeChosen ? 'light' : (L.theme || 'light');   // 預設淺色；自己選過「跟隨系統」才跟隨
+  if (t === 'light' || t === 'dark') de.setAttribute('data-theme', t); else de.removeAttribute('data-theme');
 }
 
 function field(label, input, hint) {
@@ -197,10 +200,10 @@ function aiCard() {
 function prefsCard() {
   const sumEl = sumLine();
   const TN = { auto: '跟隨系統', light: '淺色', dark: '深色' };
-  const drawSumP = () => { sumEl.textContent = TN[L.theme || 'auto'] + '・字體' + ({ 0.9: '小', 1: '預設', 1.15: '大', 1.3: '特大' }[+L.fontScale || 1] || '預設') + '・' + (L.keepThumbs ? '存小照片' : '不存照片'); };
+  const drawSumP = () => { sumEl.textContent = TN[L.theme === 'auto' && !L.themeChosen ? 'light' : (L.theme || 'light')] + '・字體' + ({ 0.9: '小', 1: '預設', 1.15: '大', 1.3: '特大' }[+L.fontScale || 1] || '預設') + '・' + (L.keepThumbs ? '存小照片' : '不存照片'); };
   const card = h('div');
   const theme = h('select', h('option', { value: 'auto' }, '跟隨系統'), h('option', { value: 'light' }, '淺色'), h('option', { value: 'dark' }, '深色'));
-  theme.value = L.theme; theme.onchange = () => { L.theme = theme.value; commitLocal(); applyTheme(); drawSumP(); };
+  theme.value = L.theme === 'auto' && !L.themeChosen ? 'light' : L.theme; theme.onchange = () => { L.theme = theme.value; L.themeChosen = true; commitLocal(); applyTheme(); drawSumP(); };
   const FS = [['0.9', '小'], ['1', '預設'], ['1.15', '大'], ['1.3', '特大']];
   const fs = pills(FS, String(+L.fontScale || 1), v => { L.fontScale = +v; commitLocal(); document.documentElement.style.zoom = +v === 1 ? '' : v; drawSumP(); });
   const tog = (key, label, hint) => {
@@ -212,6 +215,9 @@ function prefsCard() {
     tog('fxVisual', '結束進餐／斷食的特效'),
     tog('fxSound', '音效'),
     tog('fxVoice', '語音念「砸瓦魯多」', '用手機內建的語音念出。手機靜音時可能聽不到；部分手機的 app 版不支援語音。'));
+  const wk = h('select', ...WEEK_MODES.map(([v, t]) => h('option', { value: v }, t)));
+  wk.value = S.prefs.weekStart || 'roll';
+  wk.onchange = () => { S.prefs.weekStart = wk.value; commit(); };
   const bkd = h('select', ...[['0', '不提醒'], ['3', '3 天沒備份'], ['7', '7 天沒備份'], ['14', '14 天沒備份'], ['30', '30 天沒備份']].map(([v, t]) => h('option', { value: v }, t)));
   bkd.value = String(L.backupDays == null ? 7 : L.backupDays);
   bkd.onchange = () => { L.backupDays = +bkd.value; commitLocal(); };
@@ -223,9 +229,10 @@ function prefsCard() {
     h('label', '字體大小'), fs,
     h('label', '斷食按鈕'), fxBox,
     h('label.row', { style: { color: 'var(--tx)', marginTop: '14px', fontSize: '15px' } }, th, '保存餐點小照片'),
+    h('label', '存摺的計算期間'), wk,
     h('label', '太久沒備份時提醒'), bkd,
     h('label.row', { style: { color: 'var(--tx)', marginTop: '14px', fontSize: '15px' } }, ask, '改完問我要不要存到雲端'),
-    tip('小照片：預設不保存照片，只保存辨識出來的食物和營養；打開會占用手機空間。', h('br'), '備份提醒：這段時間有新記錄、卻沒有存到 Google Drive 或產生存檔文字時，在「今日」最上面提醒。', h('br'), '存到雲端：還沒連線 Google Drive 時，改完記錄會問你要不要連線存檔。', h('br'), '這些設定只存在這支手機，不會放進存檔。'));
+    tip('小照片：預設不保存照片，只保存辨識出來的食物和營養；打開會占用手機空間。', h('br'), '存摺：每天剩下的點數加總。可以選最近 7 天滾動，或每週日、每週一重新開始。', h('br'), '備份提醒：這段時間有新記錄、卻沒有存到 Google Drive 或產生存檔文字時，在「飲食」最上面提醒。', h('br'), '存到雲端：還沒連線 Google Drive 時，改完記錄會問你要不要連線存檔。', h('br'), '這些設定只存在這支手機，不會放進存檔。'));
   drawSumP();
   return section('prefs', '外觀與提醒', sumEl, [card]);
 }
@@ -233,7 +240,7 @@ function prefsCard() {
 export function renderSettings(root) {
   root.textContent = '';
   sectionBudget.left = 1;
-  root.append(healthCard(), omronCard(), backupCard(), profileCard(), aiCard(),
+  root.append(healthCard(), omronCard(), backupCard(), profileCard(), medsSettings(), aiCard(),
     (() => { const sl = sumLine(); sl.textContent = S.foodLibrary.length ? S.foodLibrary.length + ' 項' : '還沒有常用食物'; return section('lib', '常用食物庫', sl, [libraryManager(itemCard)]); })(),
     prefsCard(),
     (() => { const sl = sumLine(); sl.textContent = '名詞說明・免責聲明・清除資料'; return section('other', '其他', sl, [

@@ -3,7 +3,7 @@ import { S, L, commit, commitLocal, uid } from '../state.js';
 import { h, icon, toast, fold, pills, openSheet, closeSheet, val, tip } from './common.js';
 import { localDate, addDays } from '../points.js';
 import { leanSummary } from '../longterm.js';
-import { leanStatus } from './fasting.js';
+import { leanStatus, leanCard } from './fasting.js';
 import { SITES, sortEntries, onBoard, nextDose, bmi, leanMass, dn, md, wdOf, TYPES, hasValue } from '../records.js';
 
 const r1 = x => Math.round(x * 10) / 10;
@@ -101,17 +101,21 @@ function scaleCard(es) {
   if (!w && !lastOf(es, TYPES.bc)) return deviceCard('dev-scale', '體重計', '還沒有記錄', addBtn('wt', '記錄'));
   const b = w ? bmi(w.wt, S.profile.height) : null;
   const tw = +S.profile.targetWeight;
-  const summary = (w ? w.wt + ' kg' : '–') + (b ? '・BMI ' + r1(b.value) : '') + (w && tw ? (w.wt > tw ? '・差 ' + r1(w.wt - tw) + ' kg' : '・已達目標') : '');
+
   const more = [];
   if (w) more.push(stat('體重 · ' + md(w.date), w.wt, 'kg'));
+  const mx = es.reduce((a, e) => (e.wt > (a ? a.wt : 0) ? e : a), null);
+  const lost = w && mx ? mx.wt - w.wt : 0;
   for (const [k, label, unit] of [['fat', '體脂率', '%'], ['mus', '骨骼肌率', '%'], ['vis', '內臟脂肪', ''], ['bage', '身體年齡', '歲'], ['bmr', '基礎代謝', '大卡']]) {
     const x = lastOf(es, y => y[k] > 0);
     if (x) more.push(stat(label + ' · ' + md(x.date), x[k], unit));
   }
   const lm = lastOf(es, y => y.wt > 0 && y.fat > 0);
   if (lm) more.push(stat('淨體重 · ' + md(lm.date), r1(leanMass(lm)), 'kg'));
+  const summary = (w ? w.wt + ' kg' : '–') + (lost >= 0.5 ? '・已瘦 ' + r1(lost) + ' kg' : '') + (w && tw ? (w.wt > tw ? '・差 ' + r1(w.wt - tw) : '・已達目標') : '') + (b ? '・BMI ' + r1(b.value) : '');
   const lsum = leanSummary(leanStatus());
   const body = h('div', { style: { marginTop: '10px' } }, h('div.grid3', { style: { rowGap: '12px' } }, ...more),
+    mx && lost >= 0.5 ? h('div.small.num.one', { style: { marginTop: '8px' } }, '最高 ' + mx.wt + '（' + md(mx.date) + '）→ 現在 ' + w.wt + '・已瘦 ' + r1(lost) + ' kg') : null,
     lsum ? h('div.small.num', { style: { marginTop: '8px', fontWeight: 600, color: lsum.tone === 'good' ? 'var(--ac)' : lsum.tone === 'mid' ? '#ca8a04' : 'var(--warn)' } }, lsum.line) : null,
     !S.profile.height ? h('div.mu.tiny.one', { style: { marginTop: '6px' } }, '設定身高後顯示 BMI') : null);
   return deviceCard('dev-scale', '體重計', summary, addBtn('wt', '記錄'), body);
@@ -199,9 +203,8 @@ function listCard(all) {
     const ordered = sort === 'desc' ? recent.slice().reverse() : recent;
     const shown = showAllRecent ? ordered : ordered.slice(0, RECENT_LIMIT);
     const l = h('div.list'); shown.forEach(e => l.append(row(e)));
-    const box = h('div', { style: { marginTop: '8px' } }, h('div.mu.tiny', '最近 7 天'), l);
-    if (ordered.length > shown.length) box.append(h('button.link.small', { type: 'button', onclick: () => { showAllRecent = true; rerender(); } }, '顯示最近 7 天全部（還有 ' + (ordered.length - shown.length) + ' 筆）'));
-    blocks.push(box);
+    const more = ordered.length > shown.length ? h('button.link.small', { type: 'button', onclick: () => { showAllRecent = true; rerender(); } }, '顯示最近 7 天全部（還有 ' + (ordered.length - shown.length) + ' 筆）') : null;
+    blocks.push(fold('log-recent', h('span.small.num', '最近 7 天・' + recent.length + ' 筆'), [l, more], { cls: 'daygrp' }));
   }
   const monEls = {};
   for (const k of months) {
@@ -227,6 +230,9 @@ export function renderLog(el) {
   root = el;
   el.textContent = '';
   const all = sortEntries(S.entries);
-  el.append(scaleCard(all), bpCard(all), doseCard(false), listCard(all));
+  const lc = leanCard();
+  // 注射：快到期（明天、今天、逾期）排最上面，不然排在體重、血壓後面
+  const nd = nextDose(all, localDate(new Date())), dueSoon = !!nd && nd.left <= 1;
+  el.append(...(dueSoon ? [doseCard(false)] : []), scaleCard(all), ...(lc ? [lc] : []), bpCard(all), ...(dueSoon ? [] : [doseCard(false)]), listCard(all));
   showAllRecent = false;
 }

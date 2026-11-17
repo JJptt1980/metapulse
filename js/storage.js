@@ -21,15 +21,15 @@ export function defaultState() {
   return {
     schema: SCHEMA, ts: 0,
     profile: defaultProfile(),
-    entries: [], meals: [], foodLibrary: [], fasts: [], activity: [], deleted: {},
-    prefs: { fastMode: 'PURE_DYNAMIC', strictPlan: '16:8', windowStart: '12:00', mealThresholds: { kcal: 800, carb: 100 }, longTermAlpha: 0.05 },
+    entries: [], meals: [], foodLibrary: [], fasts: [], activity: [], medLog: [], deleted: {},
+    prefs: { fastMode: 'PURE_DYNAMIC', strictPlan: '16:8', windowStart: '12:00', mealThresholds: { kcal: 800, carb: 100 }, longTermAlpha: 0.05, weekStart: 'roll', meds: [] },
   };
 }
 
 export function defaultLocal() {
   return {
     geminiKey: '', geminiModel: 'gemini-3.5-flash-lite', geminiModels: [], geminiApi: 'auto',
-    theme: 'auto', keepThumbs: false, collapsed: {}, disclaimerOk: false,
+    theme: 'light', keepThumbs: false, collapsed: {}, disclaimerOk: false,
     driveLinked: false, lastBackup: 0, askBackup: true, backupDays: 7,
     notify: { freq: 'phase', quietStart: '23:00', quietEnd: '07:00', doseRemindAt: '09:00' },
   };
@@ -98,6 +98,7 @@ export function normalizeState(p) {
     foodLibrary: (Array.isArray(p.foodLibrary) ? p.foodLibrary : []).map(normalizeFood).filter(Boolean),
     fasts: Array.isArray(p.fasts) ? p.fasts.filter(f => f && f.start) : [],
     activity: (Array.isArray(p.activity) ? p.activity : []).filter(a => a && /^\d{4}-\d{2}-\d{2}$/.test(a.date)).map(a => ({ date: a.date, kcal: num(a.kcal), src: str(a.src) })),
+    medLog: (Array.isArray(p.medLog) ? p.medLog : []).filter(x => x && x.id && x.med && /^\d{4}-\d{2}-\d{2}$/.test(x.date)).map(x => ({ id: str(x.id), med: str(x.med), date: x.date, at: str(x.at) })),
     prefs: Object.assign(d.prefs, p.prefs || {}),
     deleted: p.deleted && typeof p.deleted === 'object' ? { ...p.deleted } : {},
   };

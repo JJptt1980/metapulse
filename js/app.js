@@ -9,6 +9,7 @@ import { renderCharts } from './ui/charts.js';
 import { L, S } from './state.js';
 import { h, toast } from './ui/common.js';
 import { initDrive, onDrive, driveStatus, driveEmail, connect, linked, ready } from './drive.js';
+import { scheduleSoon } from './notify.js';
 
 const APP_VERSION = window.APP_VERSION;
 $('ver').textContent = 'v' + APP_VERSION;
@@ -38,6 +39,7 @@ onChange(ev => {
   if (tab === 'chart') renderCharts($('p-chart'));
   if (tab === 'set' && ev && ev.replaced) renderSettings($('p-set'));
   if (!ev || !ev.remote) askBackupSoon();
+  scheduleSoon();                       // 服藥、注射通知（只有 Maple app）
 });
 
 /* ---------- Google Drive 狀態列、提示 ---------- */
@@ -94,6 +96,7 @@ window.addEventListener('load', () => setTimeout(checkUpdate, 1500));
 
 show('today');
 initDrive();
+scheduleSoon();
 
 /* 斷食計時：今日頁每分鐘更新一次 */
 setInterval(() => { if (tab === 'today' && !sheetOpen() && !document.hidden) renderToday($('p-today')); }, 60000);

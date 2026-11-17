@@ -180,6 +180,26 @@ export async function mealAdvice(o, context) {
   return { review: String(p.review || ''), next: String(p.next || ''), cheer: String(p.cheer || ''), ms: r.ms, api: r.api };
 }
 
+/** 週報總結：一段白話總結＋下週可以試的一個小方向（不給醫療指示） */
+export const WEEKLY_SCHEMA = {
+  type: 'object',
+  properties: { summary: { type: 'string' }, tip: { type: 'string' } },
+  required: ['summary', 'tip'],
+};
+const WEEKLY_RULES = `你是溫和的飲食記錄小幫手，用台灣繁體中文、國中生看得懂的口語。
+根據使用者這一週的點數記錄寫：
+- summary：2～3 句，先肯定做得好的地方，再點出一個可以注意的地方（例如超標的日子、蛋白質、記錄天數）。
+- tip：下週可以試的一個具體小方向，一句話。
+規則：
+1. 點數約 40 大卡＝1 點；「存摺」是每天剩下的點數加總，正數代表有熱量赤字。
+2. 不要診斷、不要建議藥物或劑量、不要叫人少吃到很極端；如果吃得太少，要溫和提醒吃夠。
+3. 不要用簡體字，不要列點，不要加表情符號。`;
+export async function weeklySummary(o, stats) {
+  const r = await callJSON(o, WEEKLY_RULES + '\n\n以下是這週的資料（JSON）：\n' + JSON.stringify(stats), WEEKLY_SCHEMA);
+  const p = r.parsed || {};
+  return { summary: String(p.summary || ''), tip: String(p.tip || '') };
+}
+
 /** 適合辨識餐點的預設模型清單（還沒向 Google 查詢時使用） */
 export const DEFAULT_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-4-hydrogen', 'gemini-4-argon'];
 

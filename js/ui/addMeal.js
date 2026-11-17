@@ -39,17 +39,25 @@ export function openAddMeal(o = {}) {
     const itemsBox = h('div', { style: { marginTop: '12px' } });
     const whenIn = h('input', { type: 'datetime-local', value: toLocalInput(when), 'aria-label': '用餐時間' });
     whenIn.onchange = () => { const d = new Date(whenIn.value); if (!isNaN(d)) { when = d; whenSet = true; drawWhen(); } };
-    const whenTxt = h('b.small.num');
+    // 用餐時間：一行下拉選單；預設「現在」＝按加入的那一刻
+    const whenSel = h('select', { 'aria-label': '用餐時間', style: { flex: 1, minWidth: 0, padding: '8px 10px' } });
     const whenBox = h('div', { style: { display: 'none', marginTop: '8px' } }, whenIn);
-    const setAgo = min => { when = new Date(Date.now() - min * 60000); whenSet = min > 0; whenIn.value = toLocalInput(when); drawWhen(); };
+    const OPTS = [['0', '現在（按加入的時間）'], ['30', '30 分鐘前'], ['60', '1 小時前'], ['120', '2 小時前'], ['custom', '自訂…']];
+    function drawWhen() {
+      whenSel.textContent = '';
+      for (const [v, t] of OPTS) whenSel.append(h('option', { value: v }, t));
+      if (whenSet) { whenSel.insertBefore(h('option', { value: 'set' }, toLocalInput(when).replace('T', ' ').slice(5)), whenSel.firstChild); whenSel.value = 'set'; }
+      else whenSel.value = '0';
+    }
+    whenSel.onchange = () => {
+      const v = whenSel.value;
+      if (v === 'custom') { whenBox.style.display = ''; whenIn.value = toLocalInput(whenSet ? when : new Date()); return; }
+      if (v === 'set') return;
+      whenBox.style.display = 'none';
+      when = new Date(Date.now() - +v * 60000); whenSet = +v > 0; whenIn.value = toLocalInput(when); drawWhen();
+    };
     const whenRow = h('div', { style: { margin: '-4px 0 12px' } },
-      h('div.row', { style: { flexWrap: 'wrap', gap: '6px' } }, h('span.small.mu', '用餐時間'), whenTxt, h('div.grow'),
-        h('button.ghost.small', { type: 'button', style: { padding: '6px 10px' }, onclick: () => setAgo(0) }, '現在'),
-        h('button.ghost.small', { type: 'button', style: { padding: '6px 10px' }, onclick: () => setAgo(30) }, '30 分鐘前'),
-        h('button.ghost.small', { type: 'button', style: { padding: '6px 10px' }, onclick: () => setAgo(60) }, '1 小時前'),
-        h('button.ghost.small', { type: 'button', style: { padding: '6px 10px' }, onclick: () => { whenBox.style.display = whenBox.style.display === 'none' ? '' : 'none'; } }, '自訂')),
-      whenBox);
-    function drawWhen() { whenTxt.textContent = whenSet ? toLocalInput(when).replace('T', ' ').slice(5) : '現在（按加入的時間）'; }
+      h('div.row', h('span.small.mu', { style: { whiteSpace: 'nowrap' } }, '用餐時間'), whenSel), whenBox);
     drawWhen();
     const saveBtn = h('button.pri.full', { type: 'button' });
     const totalTxt = h('div.mu.small.num', { style: { textAlign: 'center', marginTop: '6px' } });
@@ -187,6 +195,7 @@ export function openAddMeal(o = {}) {
       S.meals.sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : 0);
       // 記了餐點，就結束進行中的手動斷食
       for (const x of S.fasts || []) if (!x.end && x.start < at) x.end = at;
+      if (!editing) S.prefs.fastOverride = null; // 新的一餐：手動修改的斷食時間失效
       const ok = commit();
       closeSheet();
       if (ok) requestAdvice(group);

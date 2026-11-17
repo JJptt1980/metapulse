@@ -3,7 +3,7 @@ import { S, L, commit, commitLocal, plan, uid } from '../state.js';
 import { h, fold, pills, toast } from './common.js';
 import { FASTING } from '../config.js';
 import { HOURLY_MESSAGES, OMAD_DONE } from '../messages.js';
-import { currentFast, fastEnd, mealShift, stageAt, stageStarts, hourlyMessage, hybridSuggestion, eatingWindow, hm, dur } from '../fasting.js';
+import { currentFast, fastEnd, lastMealGroup, mealShift, stageAt, stageStarts, hourlyMessage, hybridSuggestion, eatingWindow, hm, dur } from '../fasting.js';
 import { openAddMeal } from './addMeal.js';
 import { longTermIndex, weightTrend, longTermMessage } from '../longterm.js';
 import { usage, localDate, roundTo } from '../points.js';
@@ -59,14 +59,17 @@ function residualSpark() {
 
 const toInput = t => { const d = new Date(t), p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()); };
 const dayLabel = t => { const d = new Date(t), n = new Date(); const diff = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - new Date(n.getFullYear(), n.getMonth(), n.getDate())) / 864e5); return (diff === 0 ? '今天 ' : diff === 1 ? '明天 ' : diff === -1 ? '昨天 ' : (d.getMonth() + 1) + '/' + d.getDate() + ' ') + hm(t); };
+const clock = hours => { const a = Math.abs(hours), h0 = Math.floor(a), m = Math.floor((a - h0) * 60); return h0 + ':' + String(m).padStart(2, '0'); };
 const MODE_NAME = Object.fromEntries(MODES);
 
-/** 依模式決定目標時數與預計結束時間 */
+/** 依模式決定目標時數（手動改過的結束時間會在 fastEnd 裡優先） */
 function targetOf(mode, f, now) {
   const P = S.prefs;
   if (mode === 'STRICT_MANUAL') {
     const w = eatingWindow(P.strictPlan || '16:8', P.windowStart || '12:00', now);
-    return { hours: w.fastHours, label: (P.strictPlan || '16:8') + '，進食窗口 ' + (P.windowStart || '12:00') + ' 開始', end: w.inWindow ? null : w.opensAt, win: w };
+    // 進食窗口還沒開：目標＝到窗口開始；窗口中：用方案的斷食時數
+    const hours = w.inWindow ? w.fastHours : Math.max(0.1, (w.opensAt - f.start) / H);
+    return { hours, label: (P.strictPlan || '16:8') + '・窗口 ' + (P.windowStart || '12:00'), win: w };
   }
   if (mode === 'HYBRID_GUIDED') {
     const { lt, wt } = longTermStatus();
@@ -77,20 +80,20 @@ function targetOf(mode, f, now) {
   return { hours: t, label: '目標 ' + t + ' 小時' };
 }
 
-/** 修改開始時間：改的是時間的來源（上一餐、手動開始、或結束斷食的時間） */
-function setStart(f, t) {
-  const iso = new Date(t).toISOString();
-  if (f.source.type === 'meal') S.meals.forEach(m => { if ((m.group || m.id) === f.source.group) m.at = iso; });
-  else { const x = S.fasts.find(z => z.id === f.source.id); if (x) { if (f.source.type === 'manual') x.start = iso; else x.end = iso; } }
-  if (S.prefs.customEnd && S.prefs.customEnd.start === f.start) S.prefs.customEnd = null;
-  commit();
+/** 階段進度條，加上預計結束的標記 */
+function stageBarWithTarget(hours, shift, targetH) {
+  const [bar, ticks] = stageBar(hours, shift);
+  if (targetH > 0 && targetH <= FASTING.barHours) {
+    bar.append(h('div', { style: { position: 'absolute', top: '-3px', left: 'calc(' + (targetH / FASTING.barHours * 100) + '% - 1px)', width: '2px', height: '16px', background: 'var(--tx)', opacity: 0.45 } }));
+  }
+  return [bar, ticks];
 }
 
 export function fastingCard() {
   const now = Date.now();
   const P = S.prefs;
   const mode = P.fastMode || 'PURE_DYNAMIC';
-  const f = currentFast(S.meals, S.fasts, now);
+  const f = currentFast(S.meals, S.fasts, now, P.fastOverride);
   const card = h('div.card');
   if (!f.start) {
     card.append(h('div.row.between', h('div', h('h2', { style: { margin: 0 } }, '斷食'), h('div.mu.small', '記第一餐之後，會從上一餐開始計時')), startBtn(false)));
@@ -100,59 +103,70 @@ export function fastingCard() {
   const st = stageAt(f.hours, shift);
   const tg = targetOf(mode, f, now);
   const win = tg.win || null;
-  const fasting = win ? !win.inWindow : (f.manual || f.hours >= FASTING.fastingFromHours);
-  const endInfo = win && win.inWindow ? null : fastEnd(f.start, tg.hours, P.customEnd, now);
-  if (win && !win.inWindow && !(P.customEnd && P.customEnd.start === f.start)) { endInfo.end = win.opensAt; endInfo.left = (win.opensAt - now) / H; }
-  const leftTxt = !endInfo ? '' : endInfo.left > 0 ? '還有 ' + dur(endInfo.left) : '已到預計時間';
-  const label = f.manual ? '已斷食' : '距上一餐';
-  const summary = label + ' ' + dur(f.hours) + (endInfo ? '・' + leftTxt : '・進食窗口中');
+  const ov = f.override;
+  const e = fastEnd(f.start, tg.hours, ov, now);
+  const over = e.left < 0;
+  const pct = Math.round(e.pct);
+  const fasting = (ov && Number.isFinite(ov.start)) || f.manual || (win ? !win.inWindow : f.hours >= FASTING.fastingFromHours);
+  const shortStage = st.text.split('，')[0];
+  const summary = (over ? '已超過 ' + dur(-e.left) : '還剩 ' + dur(e.left)) + '（' + pct + '%）・' + shortStage;
 
   const body = h('div', { style: { marginTop: '10px' } });
-  // 計時與預計結束
+  // 1. 還剩多久／已超過＋百分比
   body.append(h('div.row', { style: { alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' } },
-    h('b.num', { style: { fontSize: '34px', lineHeight: 1 } }, Math.floor(f.hours) + ':' + String(Math.floor((f.hours % 1) * 60)).padStart(2, '0')),
-    h('span.mu.small', label)));
-  const lastNames = f.lastMeal ? f.lastMeal.map(m => m.name).join('、') : '';
-  const startTxt = f.source.type === 'meal' ? '上一餐 ' + dayLabel(f.start) + (lastNames ? '・' + lastNames : '') : f.source.type === 'manual' ? '手動開始 ' + dayLabel(f.start) : '結束斷食 ' + dayLabel(f.start);
-  const endTxt = endInfo ? '預計結束 ' + dayLabel(endInfo.end) + '（' + leftTxt + '）' : '進食窗口中，到 ' + hm(win.closesAt) + ' 結束';
-  body.append(h('div.small', { style: { marginTop: '8px', lineHeight: 1.8 } }, h('div', '開始：' + startTxt), h('div', { style: { fontWeight: 600 } }, endTxt)));
+    h('span.small', { style: { fontWeight: 600 } }, over ? '已超過' : '還剩'),
+    h('b.num', { style: { fontSize: '38px', lineHeight: 1, color: over ? 'var(--warn)' : 'var(--tx)' } }, clock(e.left)),
+    h('b.num', { style: { fontSize: '18px', color: 'var(--ac)' } }, pct + '%')));
+  body.append(h('div.mu.small', { style: { marginTop: '4px' } },
+    '已斷食 ' + clock(f.hours) + '・' + (over ? '預計時間是 ' : '預計 ') + dayLabel(e.end) + (over ? '' : ' 結束') + ((ov && (Number.isFinite(ov.start) || Number.isFinite(ov.end))) ? '（已手動修改）' : '')));
+  // 2. 進度條
+  body.append(...stageBarWithTarget(f.hours, shift, (e.end - f.start) / H));
+  // 3. 身體現在的狀態
+  body.append(h('div', { style: { marginTop: '6px', fontWeight: 650 } }, '身體現在：' + st.text),
+    h('div.mu.tiny', (st.nextAt != null ? '下一階段還有 ' + dur(st.nextAt - f.hours) + '・' : '') + '階段時間因人而異，僅供參考' + (shift ? '（上一餐比較豐盛，階段往後挪約 ' + shift + ' 小時）' : '')));
+  // 4. 心靈雞湯
+  body.append(h('div', { style: { margin: '14px 0 4px', color: 'var(--ac)', fontWeight: 650, fontSize: '17px', lineHeight: 1.6 } }, hourlyMessage(f.hours, f.start, HOURLY_MESSAGES)));
+  if (mode === 'STRICT_MANUAL' && (P.strictPlan || '16:8') === '24H' && f.hours >= FASTING.plans['24H']) body.append(h('div.notice.ok', { style: { marginTop: '8px' } }, OMAD_DONE[0]));
+  // 5. 主要按鈕
+  if (fasting) {
+    body.append(h('button.pri.full', { type: 'button', onclick: () => openAddMeal() }, '結束斷食，記一餐'));
+    if (f.manual) body.append(h('button.link.small', { type: 'button', onclick: () => endManual() }, '只結束、不記餐'));
+  } else body.append(startBtn(false));
 
-  // 修改開始、結束時間
+  // 6. 收起的三區：時間、全部階段、模式
+  const sec = h('div', { style: { marginTop: '12px', borderTop: '1px solid var(--ln)', paddingTop: '4px' } });
   const sIn = h('input', { type: 'datetime-local', value: toInput(f.start) });
-  const eIn = h('input', { type: 'datetime-local', value: endInfo ? toInput(endInfo.end) : '' });
-  const saveT = h('button.pri.full', { type: 'button' }, '儲存時間');
+  const eIn = h('input', { type: 'datetime-local', value: toInput(e.end) });
+  const saveT = h('button.pri.full', { type: 'button' }, '儲存並重新計算');
   saveT.onclick = () => {
-    const ns = new Date(sIn.value).getTime(), ne = eIn.value ? new Date(eIn.value).getTime() : null;
+    const ns = new Date(sIn.value).getTime(), ne = new Date(eIn.value).getTime();
     if (!Number.isFinite(ns) || ns > Date.now()) { toast('開始時間不能晚於現在', true); return; }
-    if (ne !== null && ne <= ns) { toast('結束時間要晚於開始時間', true); return; }
-    const startChanged = Math.abs(ns - f.start) >= 60000;
-    if (startChanged) setStart(f, ns);
-    const realStart = startChanged ? currentFast(S.meals, S.fasts, Date.now()).start : f.start;
-    P.customEnd = ne !== null && (!endInfo || Math.abs(ne - endInfo.end) >= 60000 || (P.customEnd && P.customEnd.start === f.start)) ? { start: realStart, end: ne } : P.customEnd;
-    L.collapsed['fast-time'] = 0; commit(); toast('已更新斷食時間');
+    if (!Number.isFinite(ne) || ne <= ns) { toast('結束時間要晚於開始時間', true); return; }
+    const o = { group: lastMealGroup(S.meals) };
+    const prev = ov || {};
+    if (Math.abs(ns - f.start) >= 60000) o.start = ns; else if (Number.isFinite(prev.start)) o.start = prev.start;
+    if (Math.abs(ne - e.end) >= 60000) o.end = ne; else if (Number.isFinite(prev.end)) o.end = prev.end;
+    P.fastOverride = (Number.isFinite(o.start) || Number.isFinite(o.end)) ? o : null;
+    L.collapsed['fast-time'] = 0; L.fastForced = null; commit(); toast('已重新計算');
   };
-  const resetE = h('button.link.small', { type: 'button', onclick: () => { P.customEnd = null; commit(); } }, '結束時間改回依目標計算');
-  body.append(fold('fast-time', h('span.small.mu', '修改開始或結束時間'), [h('div', { style: { marginTop: '8px' } },
-    h('label', { style: { marginTop: 0 } }, f.source.type === 'meal' ? '開始時間（＝上一餐的用餐時間，會一起改）' : '開始時間'), sIn,
+  const timeBody = [h('div', { style: { marginTop: '8px' } },
+    h('label', { style: { marginTop: 0 } }, '開始時間'), sIn,
     h('label', '預計結束時間'), eIn,
-    endInfo && endInfo.custom ? resetE : null, saveT)]));
+    h('div.mu.tiny', { style: { marginTop: '4px' } }, '改過的時間最優先：經過時間、還剩多久、百分比、階段和提示文字都會照新的時間重新計算；記下一餐時自動回到從上一餐開始算。'),
+    saveT,
+    ov ? h('button.link.small', { type: 'button', onclick: () => { P.fastOverride = null; commit(); toast('已改回自動計算'); } }, '改回自動計算') : null)];
+  sec.append(fold('fast-time', h('span.small', h('b', '時間'), h('span.mu', '・' + dayLabel(f.start) + ' → ' + dayLabel(e.end) + (ov ? '（已手動修改）' : ''))), timeBody));
 
-  // 現在進行到哪個階段
-  body.append(...stageBar(f.hours, shift));
   const starts = stageStarts(shift);
   const list = h('div', { style: { marginTop: '6px' } });
   FASTING.stages.forEach((sg, i) => {
     const cur = i === st.index, done = i < st.index;
     const range = starts[i] + (starts[i + 1] != null ? '–' + starts[i + 1] : '+') + ' 小時';
-    list.append(h('div.small', { style: { display: 'flex', gap: '8px', padding: '3px 0', color: cur ? 'var(--tx)' : 'var(--mu)', fontWeight: cur ? 650 : 400, opacity: done ? 0.6 : 1 } },
-      h('span', { style: { width: '14px', color: 'var(--ac)' } }, cur ? '▶' : done ? '✓' : ''), h('span.num', { style: { width: '72px', flexShrink: 0 } }, range), h('span', sg.text)));
+    list.append(h('div.small', { style: { display: 'grid', gridTemplateColumns: '16px 76px 1fr', gap: '6px', padding: '3px 0', color: cur ? 'var(--tx)' : 'var(--mu)', fontWeight: cur ? 650 : 400, opacity: done ? 0.6 : 1 } },
+      h('span', { style: { color: 'var(--ac)' } }, cur ? '▶' : done ? '✓' : ''), h('span.num', range), h('span', sg.text)));
   });
-  body.append(h('div.small', { style: { marginTop: '6px', fontWeight: 600 } }, '現在：' + st.text,
-    st.nextAt != null ? h('span.mu', { style: { fontWeight: 400 } }, '（下一階段還有 ' + dur(st.nextAt - f.hours) + '）') : null), list,
-    h('div.mu.tiny', '階段時間因人而異，僅供參考' + (shift ? '。上一餐比較豐盛，階段往後挪約 ' + shift + ' 小時' : '') + '。'));
-  body.append(h('div', { style: { margin: '12px 0 4px', color: 'var(--ac)', fontWeight: 600 } }, hourlyMessage(f.hours, f.start, HOURLY_MESSAGES)));
+  sec.append(fold('fast-stages', h('span.small', h('b', '全部階段'), h('span.mu', '・現在第 ' + (st.index + 1) + ' 階段')), [list]));
 
-  // 模式：選完就收起來
   const pickMode = v => { P.fastMode = v; L.collapsed['fast-mode'] = 0; commit(); };
   const modeBody = [h('div', { style: { marginTop: '8px' } }, pills(MODES, mode, pickMode))];
   if (mode === 'PURE_DYNAMIC') modeBody.push(h('div', { style: { marginTop: '8px' } }, h('div.mu.tiny', '目標時數'), pills(FASTING.freeTargets.map(t => [t, t + ' 小時']), +P.fastTarget || FASTING.freeTargetDefault, v => { P.fastTarget = v; L.collapsed['fast-mode'] = 0; commit(); })));
@@ -160,27 +174,23 @@ export function fastingCard() {
     const timeIn = h('input', { type: 'time', value: P.windowStart || '12:00', style: { width: '150px' } });
     timeIn.onchange = () => { P.windowStart = timeIn.value || '12:00'; commit(); };
     modeBody.push(h('div', { style: { marginTop: '8px' } }, pills(PLANS.map(p => [p, p === '24H' ? '24H（一天一餐）' : p]), P.strictPlan || '16:8', v => { P.strictPlan = v; L.collapsed['fast-mode'] = 0; commit(); })),
-      h('div.row', { style: { marginTop: '8px' } }, h('span.small.mu', '進食窗口從'), timeIn, h('span.small.mu', '開始，' + win.eatHours + ' 小時')));
+      h('div.row', { style: { marginTop: '8px' } }, h('span.small.mu', '進食窗口從'), timeIn, h('span.small.mu', '開始，' + win.eatHours + ' 小時')),
+      h('div.small', { style: { marginTop: '6px' } }, win.inWindow ? '現在在進食窗口中，到 ' + hm(win.closesAt) + ' 結束' : '進食窗口 ' + dayLabel(win.opensAt) + ' 開始'));
+    if ((P.strictPlan || '16:8') === '24H') {
+      const b = plan(), u = usage(S.meals, localDate(new Date()));
+      if (b.ok) modeBody.push(h('div.small', { style: { marginTop: '6px', lineHeight: 1.7 } },
+        '一天一餐的檢查：蛋白質 ' + Math.round(u.today.protein) + '／' + b.proteinTarget + ' g' + (u.today.protein >= b.proteinTarget ? ' ✓' : '') +
+        '・點數 ' + roundTo(u.today.points) + '／保底 ' + b.floorPoints + (u.today.points >= b.floorPoints ? ' ✓' : '')));
+    }
   }
-  body.append(h('div', { style: { marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--ln)' } },
-    fold('fast-mode', h('span.small', h('b', '模式：' + MODE_NAME[mode]), h('span.mu', '・' + tg.label)), modeBody)));
-
   if (mode === 'HYBRID_GUIDED') {
     const sg = tg.sg;
-    body.append(h('div.notice.ok', { style: { marginTop: '10px' } }, sg.reason + '只是建議，可以依身體狀況調整。',
+    modeBody.push(h('div.notice.ok', { style: { marginTop: '10px' } }, sg.reason + '只是建議，可以依身體狀況調整。',
       !sg.hasDose ? h('div.tiny.mu', '有施打記錄後，會依照「施打後第幾天」給建議：第 1～3 天 18:6、第 4～7 天 16:8。') : null));
-    const sp = residualSpark(); if (sp) body.append(sp);
+    const sp = residualSpark(); if (sp) modeBody.push(sp);
   }
-  if (mode === 'STRICT_MANUAL' && (P.strictPlan || '16:8') === '24H') {
-    const b = plan(), u = usage(S.meals, localDate(new Date()));
-    if (b.ok) body.append(h('div.small', { style: { marginTop: '8px', lineHeight: 1.7 } },
-      '一天一餐的檢查：蛋白質 ' + Math.round(u.today.protein) + '／' + b.proteinTarget + ' g' + (u.today.protein >= b.proteinTarget ? ' ✓' : '') +
-      '・點數 ' + roundTo(u.today.points) + '／保底 ' + b.floorPoints + (u.today.points >= b.floorPoints ? ' ✓' : '')));
-    if (f.hours >= FASTING.plans['24H']) body.append(h('div.notice.ok', { style: { marginTop: '8px' } }, OMAD_DONE[0]));
-  }
-  body.append(h('div.grid2', { style: { marginTop: '12px' } },
-    h('button.pri', { type: 'button', onclick: () => openAddMeal() }, '結束斷食，記一餐'),
-    startBtn(f.manual)));
+  sec.append(fold('fast-mode', h('span.small', h('b', '模式：' + MODE_NAME[mode]), h('span.mu', '・' + tg.label)), modeBody));
+  body.append(sec);
 
   let force = false;
   if (fasting && L.fastForced !== f.start) { force = true; L.fastForced = f.start; commitLocal(); }
@@ -188,15 +198,13 @@ export function fastingCard() {
   return card;
 }
 
-function startBtn(active) {
-  return h('button.ghost', {
+function endManual() { const x = S.fasts.find(z => !z.end); if (x) x.end = new Date().toISOString(); S.prefs.fastOverride = null; commit(); toast('已結束這次斷食'); }
+
+function startBtn() {
+  return h('button.ghost.full', {
     type: 'button',
-    onclick: () => {
-      const now = new Date().toISOString();
-      if (active) { const x = S.fasts.find(z => !z.end); if (x) x.end = now; commit(); toast('已結束這次斷食'); }
-      else { S.fasts.push({ id: uid('f'), start: now, end: null, mode: S.prefs.fastMode || 'PURE_DYNAMIC' }); commit(); toast('開始計時'); }
-    },
-  }, active ? '結束斷食（不記餐）' : '從現在開始斷食');
+    onclick: () => { S.fasts.push({ id: uid('f'), start: new Date().toISOString(), end: null, mode: S.prefs.fastMode || 'PURE_DYNAMIC' }); S.prefs.fastOverride = null; commit(); toast('開始計時'); },
+  }, '從現在開始計時');
 }
 
 /** 長期指數提示：沒觸發時不顯示；觸發時一行，點開看說明 */

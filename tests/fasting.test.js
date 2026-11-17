@@ -94,16 +94,28 @@ test('體重下降速度（14 天平均）', () => {
   assert.equal(weightTrend(es.slice(0, 3), today).weeklyPct, null);
 });
 
-test('開始時間的來源與預計結束', async () => {
-  const { fastEnd } = await import('../js/fasting.js');
+test('手動修改的時間最優先，記下一餐就失效', async () => {
+  const { fastEnd, lastMealGroup } = await import('../js/fasting.js');
   const ms = [meal(5, 500, 50, 'gA')];
   assert.deepEqual(currentFast(ms, [], t0).source, { type: 'meal', group: 'gA' });
-  const f = currentFast(ms, [{ id: 'f1', start: new Date(t0 - 2 * H).toISOString(), end: null }], t0);
-  assert.deepEqual(f.source, { type: 'manual', id: 'f1' });
-  const e = fastEnd(t0 - 5 * H, 16, null, t0);
-  assert.equal(e.left, 11);
-  const c = fastEnd(t0 - 5 * H, 16, { start: t0 - 5 * H, end: t0 + 3 * H }, t0);
-  assert.equal(c.left, 3);
-  assert.equal(c.custom, true);
-  assert.equal(fastEnd(t0 - 5 * H, 16, { start: 1, end: t0 }, t0).custom, false, '別次斷食的自訂結束不適用');
+  // 改早到上一餐之前也照改
+  let ov = { group: lastMealGroup(ms, t0), start: t0 - 9 * H };
+  let f = currentFast(ms, [], t0, ov);
+  assert.equal(f.hours, 9);
+  assert.equal(f.source.type, 'override');
+  // 結束斷食留下的時間點也被手動時間蓋過
+  f = currentFast(ms, [{ id: 'x', start: new Date(t0 - 4 * H).toISOString(), end: new Date(t0 - 1 * H).toISOString() }], t0, ov);
+  assert.equal(f.hours, 9);
+  // 記了新的一餐 → 失效
+  f = currentFast([...ms, meal(1, 500, 50, 'gB')], [], t0, ov);
+  assert.equal(f.hours, 1);
+  // 預計結束：只改開始 → 依目標往後推；改了結束 → 用結束
+  let e = fastEnd(t0 - 9 * H, 16, ov, t0);
+  assert.equal(e.left, 7);
+  assert.ok(Math.abs(e.pct - 56.25) < 1e-9);
+  e = fastEnd(t0 - 9 * H, 16, { end: t0 - 1 * H }, t0);
+  assert.equal(e.left, -1);
+  assert.equal(e.custom, true);
+  assert.ok(Math.abs(e.pct - 112.5) < 1e-9);
+  assert.equal(fastEnd(t0 - 2 * H, 16, { end: t0 - 3 * H }, t0).custom, false, '結束早於開始時不採用');
 });

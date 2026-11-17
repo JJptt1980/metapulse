@@ -13,7 +13,7 @@ const dnStr = s => { const [y, m, d] = s.split('-').map(Number); return Math.rou
  * - 按了「結束斷食」但還沒記餐：從結束的時間重新算（視為吃過了）
  * @returns {{start:number|null, hours:number, manual:boolean, lastMeal:object[]|null}}
  */
-export function currentFast(meals, fasts, now = Date.now()) {
+export function currentFast(meals, fasts, now = Date.now(), override = null) {
   let lastAt = -Infinity, lastGroup = null;
   for (const m of meals) {
     const t = new Date(m.at).getTime();
@@ -27,18 +27,34 @@ export function currentFast(meals, fasts, now = Date.now()) {
     if (!f.end && fs > lastAt && fs <= now) { start = fs; manual = true; source = { type: 'manual', id: f.id }; }
     else if (f.end) { const fe = new Date(f.end).getTime(); if (fe > start && fe <= now) { start = fe; source = { type: 'end', id: f.id }; } }
   }
-  if (!Number.isFinite(start)) return { start: null, hours: 0, manual: false, lastMeal: null, source: null };
-  return { start, hours: Math.max(0, (now - start) / H), manual, lastMeal: source.type === 'meal' ? lastMeal : null, source };
+  // 使用者手動改過的時間最優先（記下一餐之前都有效）
+  const ov = overrideValid(override, lastGroup) ? override : null;
+  if (ov && Number.isFinite(ov.start) && ov.start <= now) { start = ov.start; source = { type: 'override' }; }
+  if (!Number.isFinite(start)) return { start: null, hours: 0, manual: false, lastMeal: null, source: null, override: ov };
+  return { start, hours: Math.max(0, (now - start) / H), manual, lastMeal: source.type === 'meal' ? lastMeal : null, source, override: ov };
+}
+
+/** 手動修改只對「改的時候的那一餐之後」有效；記了新的一餐就失效 */
+export function overrideValid(ov, lastGroup) {
+  return !!ov && (ov.group || null) === (lastGroup || null) && (Number.isFinite(ov.start) || Number.isFinite(ov.end));
+}
+
+/** 目前最後一餐的 group（存手動修改時用） */
+export function lastMealGroup(meals, now = Date.now()) {
+  let lastAt = -Infinity, g = null;
+  for (const m of meals) { const t = new Date(m.at).getTime(); if (t <= now && t > lastAt) { lastAt = t; g = m.group || m.id; } }
+  return g;
 }
 
 /**
- * 預計結束時間：自訂的結束時間（只對同一次斷食有效）優先，否則用目標時數
- * @returns {{end:number, left:number(小時，可為負), custom:boolean}}
+ * 預計結束與進度。手動改過的結束時間最優先，否則 開始 + 目標時數
+ * @returns {{end, left(小時，負數＝已超過), pct, custom}}
  */
-export function fastEnd(start, targetHours, customEnd, now = Date.now()) {
+export function fastEnd(start, targetHours, override, now = Date.now()) {
   let end = start + targetHours * H, custom = false;
-  if (customEnd && customEnd.start === start && Number.isFinite(customEnd.end)) { end = customEnd.end; custom = true; }
-  return { end, left: (end - now) / H, custom };
+  if (override && Number.isFinite(override.end) && override.end > start) { end = override.end; custom = true; }
+  const pct = Math.max(0, (now - start) / (end - start) * 100);
+  return { end, left: (end - now) / H, pct, custom };
 }
 
 /** 上一餐偏大時，階段整體往後挪幾小時（0、1、2） */

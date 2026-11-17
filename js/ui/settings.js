@@ -1,12 +1,13 @@
 /* 設定分頁：個人資料與預算、AI 辨識、常用食物庫、外觀、資料、免責聲明 */
 import { S, L, commit, commitLocal, plan, currentWeight } from '../state.js';
-import { h, icon, toast, fold, pills, val, $ } from './common.js';
+import { h, icon, toast, fold, pills, val, $, section, sumLine, kvTable } from './common.js';
 import { ACTIVITY_LEVELS, BUDGET } from '../config.js';
 import { bmrMifflin, ageFrom } from '../points.js';
 import { libraryManager } from './library.js';
 import { itemCard } from './mealEditor.js';
 import { analyzeMeal, listModels, DEFAULT_MODELS } from '../gemini.js';
 import { driveCard, backupTextCard, syncImportCard } from './backup.js';
+import { healthCard } from './health.js';
 
 const r1 = x => Math.round(x * 10) / 10;
 
@@ -33,7 +34,7 @@ const numIn = (v, attrs = {}) => h('input.num', { type: 'number', inputmode: 'de
 /* ---------- 個人資料 ---------- */
 function profileCard() {
   const P = S.profile;
-  const card = h('div.card', h('h2', '個人資料與每日預算'));
+  const sumEl = sumLine();
   const sum = h('div', { style: { marginTop: '14px' } });
   const save = () => { commit(); drawSum(); };
   const bind = (el, key, f = val) => { el.oninput = () => { P[key] = f(el); save(); }; return el; };
@@ -48,7 +49,9 @@ function profileCard() {
   actSel.onchange = () => { P.activity = +actSel.value; save(); };
 
   const hasEntryWt = S.entries.some(e => e.wt > 0);
-  card.append(
+  const weeksIn = bind(numIn(P.targetWeeks, { inputmode: 'numeric', placeholder: '可留空' }), 'targetWeeks');
+  const pctField = field('沒填週數時，每週減重 (% 體重)', pctIn, '預設 ' + BUDGET.defaultWeeklyLossPct + '%，上限 ' + BUDGET.maxWeeklyLossPct + '%。');
+  const body = [
     h('div.grid2',
       field('身高 (cm)', bind(numIn(P.height), 'height')),
       field('性別（估算 BMR 用）', pills([['M', '男'], ['F', '女']], P.sex, v => { P.sex = v; save(); }, 'seg'))),
@@ -57,8 +60,8 @@ function profileCard() {
       field('目前體重 (kg)', bind(numIn(P.weight), 'weight'), hasEntryWt ? '已有體重記錄，計算時使用最新一筆 ' + currentWeight() + ' kg' : null)),
     h('div.grid2',
       field('目標體重 (kg)', bind(numIn(P.targetWeight), 'targetWeight')),
-      field('預計達成週數', bind(numIn(P.targetWeeks, { inputmode: 'numeric', placeholder: '可留空' }), 'targetWeeks'))),
-    field('沒填週數時，每週減重 (% 體重)', pctIn, '預設 ' + BUDGET.defaultWeeklyLossPct + '%，上限 ' + BUDGET.maxWeeklyLossPct + '%。有填週數時以週數推算。'),
+      field('預計達成週數', weeksIn)),
+    pctField,
     field('活動係數（算 TDEE 用）', actSel),
     fold('prof-adv', h('span.small.mu', '進階：基礎代謝、蛋白質、保底、半衰期'), [
       field('基礎代謝 BMR (kcal)', bmrIn, bmrEst),
@@ -67,34 +70,38 @@ function profileCard() {
         field('每日保底 (點)', floorIn, '預設 = BMR ÷ 40')),
       field('藥物半衰期（小時）', bind(numIn(P.halfLife, { placeholder: '120' }), 'halfLife'), 'Tirzepatide 約 120 小時，Semaglutide 約 160 小時。用於預估體內殘留。'),
     ]),
-    sum);
+    sum];
 
   function drawSum() {
+    pctField.style.display = +P.targetWeeks > 0 ? 'none' : '';
     const w = currentWeight();
     const est = bmrMifflin({ weight: w, height: +P.height, age: ageFrom(+P.birthYear), sex: P.sex });
     bmrEst.textContent = est ? '留空時依 Mifflin-St Jeor 估算：' + est + ' kcal（體重更新時跟著重算）' : '填好身高、體重、出生年後可自動估算';
     const b = plan();
     sum.textContent = '';
-    if (!b.ok) { sum.append(h('div.notice', '還差身高、體重、出生年（或直接輸入 BMR），才能算出預算。')); return; }
-    const row = (k, v) => h('div.row.between.small', h('span.mu', k), h('b.num', v));
-    sum.append(h('div', { style: { background: 'var(--soft)', borderRadius: '12px', padding: '10px 12px' } },
-      row('基礎代謝 BMR', b.bmr + ' kcal' + (b.bmrSource === 'estimate' ? '（估算）' : '')),
-      row('每日消耗 TDEE', b.tdee + ' kcal'),
-      row('每週目標減重', b.weeklyLossKg ? r1(b.weeklyLossKg) + ' kg（' + r1(b.weeklyLossPct) + '%，約 ' + b.deficitKcal + ' kcal 赤字）' : '不設赤字'),
-      row('7 天點數池', b.poolPoints + ' 點（平均每天 ' + b.dailyPoints + '）'),
-      row('每日保底', b.floorPoints + ' 點'),
-      row('每日蛋白質', b.proteinTarget + ' g')));
-    if (b.capped) sum.append(h('div.notice', '依目前設定每週要減 ' + r1(b.wantedPct) + '%，超過每週體重 1% 的上限，已改用 1%（' + r1(w * 0.01) + ' kg／週）計算。'));
+    if (!b.ok) { sumEl.textContent = '尚未填寫完成'; sum.append(h('div.notice', '還差身高、體重、出生年（或直接輸入 BMR），才能算出預算。')); return; }
+    const r2 = x => Math.round(x * 100) / 100;
+    sum.append(kvTable([
+      ['基礎代謝 BMR' + (b.bmrSource === 'estimate' ? '（估算）' : ''), b.bmr, 0, 'kcal'],
+      ['每日消耗 TDEE', b.tdee, 0, 'kcal'],
+      ['每週目標減重', b.weeklyLossKg ? r2(b.weeklyLossKg) : '—', 2, b.weeklyLossKg ? 'kg' : '', b.weeklyLossKg ? '約體重的 ' + r2(b.weeklyLossPct) + '%，每週赤字約 ' + b.deficitKcal + ' kcal' : '已達目標，不設赤字'],
+      ['7 天點數池', b.poolPoints, 1, '點', '平均每天 ' + b.dailyPoints + ' 點'],
+      ['每日保底', b.floorPoints, 1, '點'],
+      ['每日蛋白質', b.proteinTarget, 0, 'g'],
+    ]));
+    if (b.capped) sum.append(h('div.notice.small', '設定的速度約每週 ' + r2(b.wantedPct) + '%，超過體重 1% 的上限，已改用 1% 計算。'));
+    sumEl.textContent = (+P.height || '–') + ' cm・' + w + ' → ' + (+P.targetWeight || '–') + ' kg・7 天 ' + b.poolPoints + ' 點・保底 ' + b.floorPoints + '・蛋白質 ' + b.proteinTarget + ' g';
   }
   drawSum();
-  return card;
+  return section('prof', '個人資料與每日預算', sumEl, body, !plan().ok);
 }
 
 /* ---------- AI ---------- */
 function aiCard() {
-  const card = h('div.card', h('h2', 'AI 辨識（Google Gemini）'));
+  const sumEl = sumLine();
+  const drawSumAI = () => { sumEl.textContent = L.geminiKey ? (L.geminiModel || '未選模型') + '・已設定 API key' : '尚未設定 API key'; };
   const key = h('input', { type: 'password', value: L.geminiKey, placeholder: '貼上 API key', autocomplete: 'off', spellcheck: false });
-  key.oninput = () => { L.geminiKey = key.value.trim(); commitLocal(); };
+  key.oninput = () => { L.geminiKey = key.value.trim(); commitLocal(); drawSumAI(); };
   const eye = h('button.ghost', { type: 'button', 'aria-label': '顯示或隱藏', onclick: () => { key.type = key.type === 'password' ? 'text' : 'password'; } }, icon('eye'));
   const modelBox = h('div');
   const modelMsg = h('div.mu.tiny', { style: { marginTop: '4px' } });
@@ -110,7 +117,7 @@ function aiCard() {
     custom.oninput = () => { L.geminiModel = custom.value.trim(); commitLocal(); };
     sel.onchange = () => {
       if (sel.value === '__custom') { custom.style.display = ''; custom.value = ''; custom.focus(); return; }
-      custom.style.display = 'none'; L.geminiModel = sel.value; commitLocal();
+      custom.style.display = 'none'; L.geminiModel = sel.value; commitLocal(); drawSumAI();
     };
     const fetchBtn = h('button.ghost', { type: 'button', style: { whiteSpace: 'nowrap' } }, '取得可用模型');
     fetchBtn.onclick = async () => {
@@ -145,41 +152,45 @@ function aiCard() {
     } catch (e) { out.textContent = ''; out.append(h('div.notice', '✗ ' + (e.message || e))); }
     test.disabled = false;
   };
-  card.append(
-    h('label', 'API key'), h('div.row', h('div.grow', key), eye),
+  drawSumAI();
+  return section('ai', 'AI 辨識（Google Gemini）', sumEl, [
+    h('label', { style: { marginTop: 0 } }, 'API key'), h('div.row', h('div.grow', key), eye),
     h('label', '模型'), modelBox, modelMsg,
     h('label.row', { style: { color: 'var(--tx)', marginTop: '12px', fontSize: '15px' } }, fast, '速度優先（讓模型少思考）'),
     h('label.row', { style: { color: 'var(--tx)', marginTop: '8px', fontSize: '15px' } }, adv, '記錄後給這一餐回饋與下一餐建議'),
     fold('ai-adv', h('span.small.mu', '進階：API 介面'), [h('label', 'API 介面'), api]),
     test, out,
     h('div.mu.tiny', { style: { marginTop: '8px', lineHeight: 1.6 } },
-      'API key 只存在這台裝置，不會列入備份；照片與文字直接從你的手機送到 Google。可到 Google AI Studio 申請 API key。'));
-  return card;
+      'API key 只存在這台裝置，不會列入備份；照片與文字直接從你的手機送到 Google。可到 Google AI Studio 申請 API key。')], !L.geminiKey);
 }
 
 /* ---------- 外觀與資料 ---------- */
 function prefsCard() {
-  const card = h('div.card', h('h2', '外觀與隱私'));
+  const sumEl = sumLine();
+  const TN = { auto: '跟隨系統', light: '淺色', dark: '深色' };
+  const drawSumP = () => { sumEl.textContent = '主題：' + TN[L.theme || 'auto'] + '・' + (L.keepThumbs ? '保存縮圖' : '不存照片'); };
+  const card = h('div');
   const theme = h('select', h('option', { value: 'auto' }, '跟隨系統'), h('option', { value: 'light' }, '淺色'), h('option', { value: 'dark' }, '深色'));
-  theme.value = L.theme; theme.onchange = () => { L.theme = theme.value; commitLocal(); applyTheme(); };
+  theme.value = L.theme; theme.onchange = () => { L.theme = theme.value; commitLocal(); applyTheme(); drawSumP(); };
   const ask = h('input', { type: 'checkbox', checked: L.askBackup !== false });
   ask.onchange = () => { L.askBackup = ask.checked; commitLocal(); };
   const th = h('input', { type: 'checkbox', checked: !!L.keepThumbs });
-  th.onchange = () => { L.keepThumbs = th.checked; commitLocal(); };
-  card.append(h('label', '主題'), theme,
+  th.onchange = () => { L.keepThumbs = th.checked; commitLocal(); drawSumP(); };
+  card.append(h('label', { style: { marginTop: 0 } }, '主題'), theme,
     h('label.row', { style: { color: 'var(--tx)', marginTop: '14px', fontSize: '15px' } }, th, '保存餐點縮圖（200px，會占用本機空間）'),
     h('div.mu.tiny', '預設不保存照片，只保存辨識結果。'),
     h('label.row', { style: { color: 'var(--tx)', marginTop: '14px', fontSize: '15px' } }, ask, '修改記錄後，若尚未連線 Google Drive 就詢問是否備份'),
     h('div.mu.tiny', '這些設定只存在這台裝置，不列入備份。'));
-  return card;
+  drawSumP();
+  return section('prefs', '外觀與提醒', sumEl, [card]);
 }
 
 export function renderSettings(root) {
   root.textContent = '';
-  root.append(driveCard(), profileCard(), aiCard(), syncImportCard(),
-    h('div.card', fold('lib', h('h2', { style: { margin: 0 } }, '常用食物庫'), [h('div', { style: { marginTop: '10px' } }, libraryManager(itemCard))])),
+  root.append(healthCard(), syncImportCard(), driveCard(), profileCard(), aiCard(),
+    (() => { const sl = sumLine(); sl.textContent = S.foodLibrary.length ? S.foodLibrary.length + ' 項' : '還沒有常用食物'; return section('lib', '常用食物庫', sl, [libraryManager(itemCard)]); })(),
     prefsCard(), backupTextCard(),
-    h('div.card', fold('legal', h('h2', { style: { margin: 0 } }, '關於本 app 與免責聲明'), [h('div', { style: { marginTop: '10px' } }, legal())])),
+    section('legal', '關於本 app 與免責聲明', null, [legal()]),
     h('p.mu.small', { style: { textAlign: 'center', margin: '18px 0 6px' } }, '覺得好用？', h('a', { href: 'https://ko-fi.com/killnopig', target: '_blank', rel: 'noopener', style: { color: 'var(--ac)' } }, '請我喝杯咖啡'), '（自願，不影響任何功能）'));
 }
 

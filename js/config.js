@@ -19,6 +19,7 @@ export const BUDGET = {
   rollingDays: 7,            // 週點數池採 7 天滾動
   proteinPerKgDefault: 1.2,
   activityDefault: 1.2,
+  exerciseRefund: 0.75,     // 運動回補：消耗 kcal × 0.75 ÷ 40（手錶通常高估消耗）
 };
 
 /** 活動係數選項（算 TDEE 用） */

@@ -66,7 +66,7 @@ export function budget(p, now = new Date()) {
   } else { weeklyLossKg = 0; wantedPct = 0; }
   let capped = false;
   const maxKg = weight * BUDGET.maxWeeklyLossPct / 100;
-  if (weeklyLossKg > maxKg) { weeklyLossKg = maxKg; capped = true; }
+  if (weeklyLossKg > maxKg) { capped = weeklyLossKg - maxKg > 0.02; weeklyLossKg = maxKg; } // 差 20 g 以內不提示
   weeklyLossKg = Math.min(weeklyLossKg, toLose); // 不要超過剩下要減的量
   const deficitKcal = Math.round(weeklyLossKg * BUDGET.kcalPerKgFat);
   const poolPoints = Math.max(0, roundTo((tdee * 7 - deficitKcal) / BUDGET.kcalPerPoint));
@@ -111,4 +111,17 @@ export function usage(meals, todayStr, days = BUDGET.rollingDays) {
     }
   }
   return { rolling, today, from };
+}
+
+/** 運動回補點數：近 7 天與今天（activity: [{date, kcal}]） */
+export function exerciseRefund(activity, todayStr, coef = BUDGET.exerciseRefund, days = BUDGET.rollingDays) {
+  const from = addDays(todayStr, -(days - 1));
+  let rolling = 0, today = 0, todayKcal = 0;
+  for (const a of activity || []) {
+    if (a.date < from || a.date > todayStr) continue;
+    const p = (+a.kcal || 0) * coef / BUDGET.kcalPerPoint;
+    rolling += p;
+    if (a.date === todayStr) { today += p; todayKcal += +a.kcal || 0; }
+  }
+  return { rolling: roundTo(rolling), today: roundTo(today), todayKcal };
 }

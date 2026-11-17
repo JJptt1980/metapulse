@@ -82,6 +82,25 @@ export function fold(key, summary, body, { open = false, force = false, cls = ''
   return d;
 }
 
+/** 設定頁用的區塊：收合時只顯示標題與一行摘要 sumEl（由呼叫端更新文字） */
+export function section(key, title, sumEl, body, open = false) {
+  return h('div.card', fold(key, h('div.grow', h('h2', { style: { margin: 0 } }, title), sumEl),
+    [h('div', { style: { marginTop: '12px' } }, ...[].concat(body))], { open }));
+}
+export const sumLine = () => h('div.mu.small', { style: { marginTop: '2px', fontWeight: 400 } });
+
+/** 數值表：小數點對齊。rows: [label, number, decimals, unit, sub?] */
+export function kvTable(rows) {
+  const t = h('div.kv');
+  for (const [k, v, dec, unit, sub] of rows) {
+    const s = typeof v === 'number' ? v.toFixed(dec || 0) : String(v);
+    const [i, f] = s.split('.');
+    t.append(h('span.k', k), h('span.i.num', i), h('span.f.num', f != null ? '.' + f : ''), h('span.u', unit || ''));
+    if (sub) t.append(h('span.sub', sub));
+  }
+  return t;
+}
+
 /** 膠囊／分段按鈕 */
 export function pills(opts, value, onPick, cls = 'pills') {
   const box = h('div.' + cls);

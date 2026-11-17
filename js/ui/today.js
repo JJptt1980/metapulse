@@ -1,7 +1,7 @@
 /* 今日分頁：7 天點數池（環形）、保底與蛋白質進度、拍照按鈕、餐點列表 */
 import { S, plan } from '../state.js';
 import { h, icon, fold, hm, WD, fmtPts } from './common.js';
-import { usage, localDate, addDays } from '../points.js';
+import { usage, localDate, addDays, exerciseRefund } from '../points.js';
 import { openAddMeal } from './addMeal.js';
 import { latestAdviceCard } from './advice.js';
 import { doseCard } from './log.js';
@@ -68,16 +68,19 @@ export function renderToday(root) {
       h('div.mu.small', '需要身高、體重、出生年（或手動輸入基礎代謝），才能算出每日熱量與 7 天點數池。'),
       h('button.ghost.full', { type: 'button', onclick: () => document.querySelector('nav.tabs button[data-t="set"]').click() }, '前往設定'));
   } else {
-    const left = b.poolPoints - u.rolling;
+    const ex = exerciseRefund(S.activity, todayStr);
+    const pool = b.poolPoints + ex.rolling;
+    const left = pool - u.rolling;
     const over = left < 0;
     top.append(h('div.hero',
-      h('div.ring', ring(b.poolPoints ? Math.max(0, left) / b.poolPoints : 0, over),
-        h('div.c', h('span.mu.tiny', over ? '超出' : '7 天剩'), h('b.num', fmtPts(Math.abs(left))), h('span.mu.tiny.num', '/ ' + fmtPts(b.poolPoints) + ' 點'))),
+      h('div.ring', ring(pool ? Math.max(0, left) / pool : 0, over),
+        h('div.c', h('span.mu.tiny', over ? '超出' : '7 天剩'), h('b.num', fmtPts(Math.abs(left))), h('span.mu.tiny.num', '/ ' + fmtPts(pool) + ' 點'))),
       h('div',
         metric('今日點數', u.today.points, b.floorPoints, '點', u.today.points < b.floorPoints ? '保底：提醒今天別吃太少，不是要求吃到' : '已達今日保底', false),
         metric('蛋白質', u.today.protein, b.proteinTarget, 'g', null, false))));
     top.append(h('div.mu.tiny.num', { style: { marginTop: '10px' } },
-      '近 7 天（' + md(u.from) + '～今天）已用 ' + fmtPts(u.rolling) + ' 點 · 今日 ' + Math.round(u.today.kcal) + ' kcal'));
+      '近 7 天（' + md(u.from) + '～今天）已用 ' + fmtPts(u.rolling) + ' 點 · 今日 ' + Math.round(u.today.kcal) + ' kcal'
+      + (ex.rolling ? ' · 運動回補 +' + fmtPts(ex.rolling) + ' 點' + (ex.todayKcal ? '（今天 ' + ex.todayKcal + ' kcal）' : '') : '')));
   }
   top.append(h('button.pri.cta', { type: 'button', onclick: () => openAddMeal() }, icon('camera'), '記一餐'));
   root.append(top);

@@ -11,11 +11,11 @@
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <script>
 /* 版本號：發布新版時改這裡。版本檢查會比對線上 index.html 的這一行。 */
-window.APP_VERSION='0.3.0';
+window.APP_VERSION='0.4.0';
 /* 主題先套用，避免閃一下 */
 try{var _l=JSON.parse(localStorage.getItem('metapulse-local')||'{}');if(_l.theme==='light'||_l.theme==='dark')document.documentElement.setAttribute('data-theme',_l.theme)}catch(e){}
 /* 每個模組加上 ?v=版本，更新後不會吃到舊的快取 */
-(function(){var f=['app','config','points','units','foods','storage','gemini','state','advice','ui/advice','records','migrate','drive','ui/log','ui/charts','ui/backup','ui/common','ui/today','ui/addMeal','ui/mealEditor','ui/settings','ui/library'],m={};
+(function(){var f=['app','config','points','units','foods','storage','gemini','state','advice','ui/advice','records','migrate','drive','ui/log','ui/charts','ui/backup','health','ui/health','ui/common','ui/today','ui/addMeal','ui/mealEditor','ui/settings','ui/library'],m={};
 f.forEach(function(n){m['./js/'+n+'.js']='./js/'+n+'.js?v='+window.APP_VERSION});
 var s=document.createElement('script');s.type='importmap';s.textContent=JSON.stringify({imports:m});document.head.appendChild(s)})();
 </script>
@@ -96,6 +96,9 @@ svg.i{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stro
 .empty{color:var(--mu);text-align:center;padding:14px 0;font-size:14px}
 .notice{background:var(--warn-soft);color:var(--tx);border-radius:12px;padding:10px 12px;font-size:14px;margin-top:10px}
 .notice.ok{background:var(--ac-soft)}
+.kv{display:grid;grid-template-columns:1fr auto auto auto;row-gap:6px;font-size:14px;background:var(--soft);border-radius:12px;padding:12px 14px;align-items:baseline}
+.kv .k{color:var(--mu)}.kv .i{text-align:right;font-weight:650}.kv .f{font-weight:650;min-width:1.4em}.kv .u{color:var(--mu);padding-left:4px;min-width:2.4em}
+.kv .sub{grid-column:1/-1;font-size:12px;color:var(--mu);margin:-6px 0 2px}
 /* 面板 */
 .sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:30;display:none}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:31;max-height:94vh;overflow:auto;background:var(--bg);border-radius:20px 20px 0 0;

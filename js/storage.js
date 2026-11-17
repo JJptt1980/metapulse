@@ -21,7 +21,7 @@ export function defaultState() {
   return {
     schema: SCHEMA, ts: 0,
     profile: defaultProfile(),
-    entries: [], meals: [], foodLibrary: [], fasts: [],
+    entries: [], meals: [], foodLibrary: [], fasts: [], activity: [],
     prefs: { fastMode: 'PURE_DYNAMIC', strictPlan: '16:8', windowStart: '12:00', mealThresholds: { kcal: 800, carb: 100 }, longTermAlpha: 0.05 },
   };
 }
@@ -97,6 +97,7 @@ export function normalizeState(p) {
     meals: (Array.isArray(p.meals) ? p.meals : []).map(normalizeMeal).filter(Boolean),
     foodLibrary: (Array.isArray(p.foodLibrary) ? p.foodLibrary : []).map(normalizeFood).filter(Boolean),
     fasts: Array.isArray(p.fasts) ? p.fasts.filter(f => f && f.start) : [],
+    activity: (Array.isArray(p.activity) ? p.activity : []).filter(a => a && /^\d{4}-\d{2}-\d{2}$/.test(a.date)).map(a => ({ date: a.date, kcal: num(a.kcal), src: str(a.src) })),
     prefs: Object.assign(d.prefs, p.prefs || {}),
   };
 }

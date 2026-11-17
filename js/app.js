@@ -8,7 +8,7 @@ import { renderLog } from './ui/log.js';
 import { renderCharts } from './ui/charts.js';
 import { L, S } from './state.js';
 import { h, toast } from './ui/common.js';
-import { initDrive, onDrive, driveStatus, connect, linked, ready } from './drive.js';
+import { initDrive, onDrive, driveStatus, driveEmail, connect, linked, ready } from './drive.js';
 
 const APP_VERSION = window.APP_VERSION;
 $('ver').textContent = 'v' + APP_VERSION;
@@ -42,7 +42,7 @@ onChange(ev => {
 
 /* ---------- Google Drive 狀態列、提示 ---------- */
 const syncEl = $('sync');
-const drawSync = t => { syncEl.textContent = t; };
+const drawSync = t => { syncEl.textContent = t + (linked() && driveEmail() ? '・' + driveEmail() : ''); };
 drawSync(driveStatus());
 syncEl.onclick = () => { if (linked() && !ready()) connect(true); };
 onDrive((t, ev) => {

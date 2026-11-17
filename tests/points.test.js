@@ -74,3 +74,9 @@ test('日期工具', () => {
   assert.equal(addDays('2026-03-01', -1), '2026-02-28');
   assert.equal(localDate(new Date(2026, 0, 5, 23, 59)), '2026-01-05');
 });
+
+test('只超過上限一點點時不提示，但仍以 1% 計算', () => {
+  const b = budget({ weight: 105.3, height: 175, birthYear: 1980, targetWeight: 80, targetWeeks: 24 }, now);
+  assert.equal(b.capped, false);
+  assert.ok(Math.abs(b.weeklyLossKg - 1.053) < 1e-9);
+});

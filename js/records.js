@@ -106,3 +106,34 @@ export function planImport(incoming, existing) {
   }
   return plan;
 }
+
+/**
+ * 規劃匯入量測資料（Health Connect、之後的 Omron CSV 共用）：
+ * - 血壓：重複判斷同 isDuplicate（2 分鐘內同值視為同一筆）
+ * - 只有體脂／基礎代謝、沒有體重：同一天已有相同數值就略過
+ * - 有體重：同一天已有相同體重（且不是血壓那筆）→ 只補上缺少的體組成欄位
+ * @returns {{add:[], merge:[{id, fill}], dup:number, from, to}}
+ */
+export function planMeasurements(recs, existing) {
+  const pool = existing.map(e => ({ ...e })); // 複本：預覽時不改動實際資料
+  const out = { add: [], merge: [], dup: 0, from: '', to: '' };
+  for (const rec of recs) {
+    if (!out.from || rec.date < out.from) out.from = rec.date;
+    if (!out.to || rec.date > out.to) out.to = rec.date;
+    if (isDuplicate(rec, pool)) { out.dup++; continue; }
+    if (!(rec.sys > 0) && !(rec.wt > 0) && (rec.fat > 0 || rec.bmr > 0)) {
+      if (pool.some(e => e.date === rec.date && ((rec.fat > 0 && Math.abs((e.fat || 0) - rec.fat) < 0.05) || (rec.bmr > 0 && e.bmr === rec.bmr)))) { out.dup++; continue; }
+    }
+    if (!(rec.sys > 0) && rec.wt > 0) {
+      const ex = pool.find(e => e.date === rec.date && e.wt > 0 && Math.abs(e.wt - rec.wt) < 0.05 && !(e.sys > 0));
+      if (ex) {
+        const fill = {};
+        for (const q of ['fat', 'mus', 'vis', 'bage', 'bmr']) if (!(ex[q] > 0) && rec[q] > 0) fill[q] = rec[q];
+        if (Object.keys(fill).length && ex.id != null) { out.merge.push({ id: ex.id, fill }); Object.assign(ex, fill); } else out.dup++;
+        continue;
+      }
+    }
+    out.add.push(rec); pool.push(rec);
+  }
+  return out;
+}

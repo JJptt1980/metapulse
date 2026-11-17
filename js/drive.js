@@ -14,6 +14,16 @@ const UPLOAD = 'https://www.googleapis.com/upload/drive/v3/files';
 let tok = null, tokExp = 0, tc = null, fid = null, tmr = null;
 const listeners = new Set();
 let status = L.driveLinked ? 'Google Drive 已連結，連線中…' : '本機儲存';
+export const driveEmail = () => L.driveEmail || '';
+
+/** 取得目前登入的帳號（Drive about；只需 drive.appdata 權限） */
+async function fetchAccount() {
+  try {
+    const j = await (await gfetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)')).json();
+    const em = j && j.user && j.user.emailAddress;
+    if (em && em !== L.driveEmail) { L.driveEmail = em; commitLocal(); }
+  } catch (e) { /* 取不到帳號不影響備份 */ }
+}
 export const onDrive = fn => listeners.add(fn);
 const emit = (text, event) => { if (text) status = text; listeners.forEach(f => { try { f(status, event); } catch (e) { console.error(e); } }); };
 export const driveStatus = () => status;
@@ -80,7 +90,8 @@ async function pullAndMerge() {
   await pushRemote();
 }
 
-export function connect(interactive) {
+/** interactive：使用者按按鈕；chooseAccount：強制顯示帳號選擇畫面 */
+export function connect(interactive, chooseAccount) {
   if (!window.google || !google.accounts || !google.accounts.oauth2) { emit('Google 登入元件尚未載入，請稍後再試', 'error'); return; }
   if (!tc) tc = google.accounts.oauth2.initTokenClient({
     client_id: GOOGLE_CLIENT_ID, scope: SCOPE,
@@ -88,17 +99,20 @@ export function connect(interactive) {
       if (r.error || !r.access_token) { emit('Google 連線失敗（點此重新連線）', 'need-auth'); return; }
       tok = r.access_token; tokExp = Date.now() + (r.expires_in || 3600) * 1000;
       L.driveLinked = true; commitLocal();
+      await fetchAccount();
       try { await pullAndMerge(); } catch (e) { emit('Drive 同步失敗，資料仍在本機（點此重新連線）', 'push-failed'); }
       emit(null, 'linked');
     },
     error_callback: () => emit('Google Drive 需要重新連線（點此重新連線）', 'need-auth'),
   });
-  tc.requestAccessToken({ prompt: interactive ? '' : 'none' });
+  const opt = { prompt: !interactive ? 'none' : (chooseAccount || !L.driveEmail ? 'select_account' : '') };
+  if (L.driveEmail && !chooseAccount) opt.hint = L.driveEmail;
+  tc.requestAccessToken(opt);
 }
 
 export function disconnect() {
   try { if (tok && window.google) google.accounts.oauth2.revoke(tok); } catch (e) { /* 忽略 */ }
-  tok = null; fid = null; L.driveLinked = false; commitLocal();
+  tok = null; fid = null; L.driveLinked = false; L.driveEmail = ''; commitLocal();
   emit('本機儲存（已中斷 Google Drive）', 'unlinked');
 }
 

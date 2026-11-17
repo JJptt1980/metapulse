@@ -235,7 +235,9 @@ function prefsCard() {
 export function renderSettings(root) {
   root.textContent = '';
   sectionBudget.left = 1;
-  root.append(healthCard(), omronCard(), backupCard(), profileCard(), aiCard(),
+  root.append(h('a.card', { href: 'guide.html', style: { display: 'block', textDecoration: 'none', color: 'var(--tx)' } },
+    h('div.row.between', h('div', h('b', '搬家說明'), h('div.mu.small', '把同步版、Omron、Health Connect、Excel 的資料整合到 Maple')), h('span.mu', '›'))),
+    healthCard(), omronCard(), backupCard(), profileCard(), aiCard(),
     (() => { const sl = sumLine(); sl.textContent = S.foodLibrary.length ? S.foodLibrary.length + ' 項' : '還沒有常用食物'; return section('lib', '常用食物庫', sl, [libraryManager(itemCard)]); })(),
     prefsCard(),
     glossaryCard(),

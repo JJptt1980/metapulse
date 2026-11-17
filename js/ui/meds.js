@@ -1,20 +1,20 @@
 /* 服藥提醒：設定裡新增藥物與時間；飲食頁顯示今天的服藥狀態，按「已服用」記下來 */
 import { S, commit, uid } from '../state.js';
-import { h, toast, section, sumLine, tip, timePick } from './common.js';
-import { localDate } from '../points.js';
+import { h, toast, section, sumLine, tip, timePick, fold, openSheet, closeSheet } from './common.js';
+import { localDate, addDays } from '../points.js';
 import { canNotify, schedule, notifyStatus, openExactSetting, testNotify } from '../notify.js';
 
 const minOf = t => +t.slice(0, 2) * 60 + +t.slice(3, 5);
 const nowMin = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
 const hm = iso => { const d = new Date(iso); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
 
-/** 今天每種藥的狀態：taken（已服用記錄）、due（該吃了：時間前 1 小時起，還沒吃）、late（過了 1 小時還沒吃） */
+/** 今天每種藥的狀態：taken（已服用記錄）、due（該吃了：到了設定時間還沒吃）、late（過了 1 小時還沒吃） */
 export function medStatus() {
   const today = localDate(new Date()), n = nowMin();
   return (S.prefs.meds || []).filter(m => m && m.name && m.time).map(m => {
     const log = (S.medLog || []).find(x => x.med === m.id && x.date === today);
     const diff = n - minOf(m.time);
-    return { med: m, log, due: !log && diff >= -60, late: !log && diff > 60 };
+    return { med: m, log, due: !log && diff >= 0, late: !log && diff > 60 };
   }).sort((a, b) => (a.med.time < b.med.time ? -1 : 1));
 }
 
@@ -23,7 +23,7 @@ export function medCard() {
   const list = medStatus();
   if (!list.length) return null;
   const urgent = list.some(x => x.due);
-  const card = h('div.card', urgent ? { style: { borderColor: 'var(--warn)', borderWidth: '2px' } } : null);
+  const card = h('div.card', urgent ? { style: { borderColor: 'var(--warn)', borderWidth: '2px', position: 'sticky', top: document.documentElement.classList.contains('native') ? '36px' : '6px', zIndex: 6, boxShadow: '0 4px 14px rgba(0,0,0,.12)' } } : null);
   card.append(h('h2', { style: { margin: '0 0 6px' } }, urgent ? '該吃藥了' : '今天的藥'));
   for (const x of list) {
     const m = x.med;
@@ -46,7 +46,87 @@ export function medCard() {
         h('span.one', { style: { fontWeight: x.due ? 650 : 400, color: x.late ? 'var(--warn)' : '' } }, m.time + ' ' + m.name + (x.late ? '・還沒吃' : '')), take));
     }
   }
+  card.append(fold('med-cal', h('span.small', { style: { color: 'var(--ac)', fontWeight: 650 } }, '服藥記錄'), [calendar()], { cls: 'daygrp' }));
   return { card, urgent };
+}
+
+/* ---------- 服藥記錄月曆：每一天都可以改 ---------- */
+const WD = '日一二三四五六';
+let calMonth = '';                                       // 'YYYY-MM'，記住目前看的月份
+/** 這種藥從哪天開始算（新增時記下 since；舊資料用最早的服藥記錄） */
+function sinceOf(m) {
+  if (m.since) return m.since;
+  const ds = (S.medLog || []).filter(x => x.med === m.id).map(x => x.date).sort();
+  return ds[0] || localDate(new Date());
+}
+/** 某一天：該吃幾種、吃了幾種 */
+function dayState(d) {
+  const meds = (S.prefs.meds || []).filter(m => m && m.name && sinceOf(m) <= d);
+  const taken = meds.filter(m => (S.medLog || []).some(x => x.med === m.id && x.date === d)).length;
+  return { need: meds.length, taken };
+}
+function calendar() {
+  const box = h('div', { style: { marginTop: '8px' } });
+  const draw = () => {
+    box.textContent = '';
+    const today = localDate(new Date());
+    if (!calMonth) calMonth = today.slice(0, 7);
+    const [y, mo] = calMonth.split('-').map(Number);
+    const first = calMonth + '-01', lastDay = new Date(y, mo, 0).getDate(), startDow = new Date(y, mo - 1, 1).getDay();
+    const shift = n => { const d = new Date(y, mo - 1 + n, 1); calMonth = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); draw(); };
+    // 這個月的統計：從開始吃藥那天（或月初）到今天（或月底）
+    let full = 0, days = 0;
+    for (let i = 1; i <= lastDay; i++) { const d = calMonth + '-' + String(i).padStart(2, '0'); if (d > today) break; const st = dayState(d); if (!st.need) continue; days++; if (st.taken >= st.need) full++; }
+    box.append(h('div.row.between', { style: { marginBottom: '6px' } },
+      h('button.ghost', { type: 'button', style: { padding: '6px 12px' }, onclick: () => shift(-1) }, '‹'),
+      h('b.small.num', y + ' 年 ' + mo + ' 月' + (days ? '・吃了 ' + full + '/' + days + ' 天' : '')),
+      h('button.ghost', { type: 'button', style: { padding: '6px 12px' }, onclick: () => shift(1) }, '›')));
+    const grid = h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '4px', textAlign: 'center' } });
+    for (const c of WD) grid.append(h('div.mu.tiny', c));
+    for (let i = 0; i < startDow; i++) grid.append(h('div'));
+    for (let i = 1; i <= lastDay; i++) {
+      const d = calMonth + '-' + String(i).padStart(2, '0'), st = dayState(d), future = d > today;
+      const bg = future || !st.need ? 'var(--soft)' : st.taken >= st.need ? 'var(--ac)' : st.taken ? '#e0a800' : 'rgba(210,70,50,.18)';
+      const fg = !future && st.need && st.taken >= st.need ? 'var(--act)' : 'var(--tx)';
+      const cell = h('button', { type: 'button', disabled: future || !st.need, style: { padding: '6px 0', borderRadius: '8px', background: bg, color: fg, fontSize: '13px', fontWeight: d === today ? 800 : 500, border: d === today ? '2px solid var(--tx)' : '0', opacity: future ? 0.5 : 1 } },
+        String(i), h('div', { style: { fontSize: '10px', lineHeight: 1 } }, future || !st.need ? ' ' : st.taken >= st.need ? '✓' : st.need > 1 ? st.taken + '/' + st.need : ' '));
+      cell.onclick = () => editDay(d, draw);
+      grid.append(cell);
+    }
+    box.append(grid, h('div.mu.tiny.one', { style: { marginTop: '6px' } }, '綠＝都吃了・黃＝吃了一部分・紅＝沒記錄・點日期可以修改'));
+    void first;
+  };
+  draw();
+  return box;
+}
+/** 某一天的服藥：每種藥可以勾選或取消、改時間 */
+function editDay(d, redraw) {
+  const meds = (S.prefs.meds || []).filter(m => m && m.name && sinceOf(m) <= d);
+  openSheet(sh => {
+    sh.append(h('div.sheet-h', h('b', (+d.slice(5, 7)) + '/' + (+d.slice(8)) + '（週' + WD[new Date(d + 'T12:00').getDay()] + '）的藥'), h('button.link', { type: 'button', onclick: () => closeSheet() }, '關閉')));
+    const rows = meds.map(m => {
+      const log = (S.medLog || []).find(x => x.med === m.id && x.date === d);
+      const cb = h('input', { type: 'checkbox', checked: !!log, style: { width: '22px', height: '22px' } });
+      let t = log ? hm(log.at) : m.time;
+      const tp = timePick(t, v => { t = v; cb.checked = true; });
+      sh.append(h('div.card', { style: { margin: '0 0 10px' } }, h('label.row', { style: { color: 'var(--tx)', fontSize: '16px', margin: 0, gap: '10px' } }, cb, h('b', m.name), h('span.mu.small', '設定 ' + m.time)),
+        h('div.row', { style: { marginTop: '8px', gap: '8px' } }, h('span.small.mu', '吃藥時間'), tp)));
+      return { m, cb, get t() { return t; } };
+    });
+    const save = h('button.pri.full', { type: 'button' }, '儲存');
+    save.onclick = () => {
+      S.medLog = S.medLog || [];
+      for (const r of rows) {
+        const i = S.medLog.findIndex(x => x.med === r.m.id && x.date === d);
+        const [hh, mm] = r.t.split(':').map(Number), [yy, mo, dd] = d.split('-').map(Number);
+        const at = new Date(yy, mo - 1, dd, hh, mm).toISOString();
+        if (r.cb.checked) { if (i >= 0) S.medLog[i] = { ...S.medLog[i], at }; else S.medLog.push({ id: uid('k'), med: r.m.id, date: d, at }); }
+        else if (i >= 0) S.medLog.splice(i, 1);
+      }
+      commit(); closeSheet(); toast('已更新 ' + (+d.slice(5, 7)) + '/' + (+d.slice(8)) + ' 的服藥記錄'); redraw && redraw();
+    };
+    sh.append(save);
+  });
 }
 
 /** 設定頁：藥物清單（名稱＋時間） */
@@ -83,8 +163,8 @@ export function medsSettings() {
     });
   };
   const add = h('button.ghost.full', { type: 'button' }, '＋ 新增藥物');
-  add.onclick = () => { meds().push({ id: uid('rx'), name: '降血糖藥', time: '19:00' }); commit(); draw(); resched(); };
+  add.onclick = () => { meds().push({ id: uid('rx'), name: '降血糖藥', time: '19:00', since: localDate(new Date()) }); commit(); draw(); resched(); };
   draw(); drawSum(); drawStatus();
   return section('meds', '服藥提醒', sumEl, [list, add, msg, actions,
-    tip('到了吃藥時間前後，「飲食」頁最上面會出現服藥卡，吃完按「已服用」。在 Maple app 裡，時間到會跳手機通知（第一次會問你要不要允許通知）；網頁版不會通知，只會顯示卡片。這只是提醒，吃藥的方式請照醫師或藥師的指示。')]);
+    tip('到了吃藥時間，「飲食」頁最上面會出現服藥卡（往下捲也會貼在頂端），吃完按「已服用」。服藥卡下面的「服藥記錄」是月曆，每一天都可以點開修改。在 Maple app 裡，時間到會跳手機通知（第一次會問你要不要允許通知）；網頁版不會通知，只會顯示卡片。這只是提醒，吃藥的方式請照醫師或藥師的指示。')]);
 }

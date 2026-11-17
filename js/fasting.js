@@ -126,7 +126,7 @@ export function eatingWindow(plan, windowStart, now = Date.now(), cfg = FASTING)
 }
 
 export const hm = t => { const d = new Date(t); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
-export const dur = hours => { const h = Math.floor(hours), m = Math.floor((hours - h) * 60); return h + ' 小時 ' + pad(m) + ' 分'; };
+export const dur = hours => { const h = Math.floor(hours), m = Math.floor((hours - h) * 60); return h ? h + ' 小時 ' + pad(m) + ' 分' : m + ' 分'; };   // 不到 1 小時只寫分鐘
 export { dnLocal };
 
 /** 時間是否落在勿擾時段（例如 23:00～07:00，可跨午夜） */

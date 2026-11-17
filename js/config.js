@@ -39,11 +39,11 @@ export const PORTION = {
 /** 斷食階段（距上一餐的小時數，寬區間）。文字可以自己改 */
 export const FASTING = {
   stages: [
-    { from: 0, text: '消化中，主要使用剛吃進的血糖' },
-    { from: 4, text: '開始使用儲存的醣類（肝醣）' },
-    { from: 12, text: '逐漸偏向使用脂肪' },
-    { from: 16, text: '長時間斷食中' },
-    { from: 20, text: '斷食時間偏長，身體分解蛋白質的比例可能逐漸增加' },
+    { from: 0, short: '消化中', text: '消化中，主要使用剛吃進的血糖' },
+    { from: 4, short: '用肝醣', text: '開始使用儲存的醣類（肝醣）' },
+    { from: 12, short: '燃脂中', text: '逐漸偏向使用脂肪' },
+    { from: 16, short: '深度斷食', text: '長時間斷食中' },
+    { from: 20, short: '時間偏長', text: '斷食時間偏長，身體分解蛋白質的比例可能逐漸增加' },
   ],
   // 上一餐比較大時，所有階段往後挪；特別大的一餐最多挪 2 小時
   bigMeal: { kcal: 800, carb: 100, shift: 1 },

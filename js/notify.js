@@ -73,7 +73,7 @@ export async function schedule() {
   fn.forEach((x, i) => {
     const h0 = Math.round(x.hours);
     const n = x.kind === 'done' ? { title: '斷食達標：' + h0 + ' 小時', body: '可以準備吃東西了。累了就休息，斷食不需要逞強。' }
-      : x.kind === 'stage' ? { title: '斷食 ' + h0 + ' 小時', body: '身體現在：' + FASTING.stages[x.index].text }
+      : x.kind === 'stage' ? { title: '斷食 ' + h0 + ' 小時・' + FASTING.stages[x.index].short, body: '身體現在：' + FASTING.stages[x.index].text }
       : { title: '斷食 ' + h0 + ' 小時', body: hourlyMessage(x.hours + 0.01, fi.start, HOURLY_MESSAGES) };
     list.push({ id: FAST_BASE + i, ...n, schedule: { at: new Date(x.at), allowWhileIdle: true } });
   });

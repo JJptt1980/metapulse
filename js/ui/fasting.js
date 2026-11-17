@@ -154,7 +154,7 @@ export function fastingCard() {
   const over = e.left < 0;
   const pct = Math.round(e.pct);
   const fasting = (ov && Number.isFinite(ov.start)) || f.manual || (win ? !win.inWindow : f.hours >= FASTING.fastingFromHours);
-  const shortStage = st.text.split('，')[0];
+  const shortStage = FASTING.stages[st.index].short || st.text.split('，')[0];
   const summary = (over ? '已超過 ' + dur(-e.left) : '還剩 ' + dur(e.left)) + '（' + pct + '%）・' + shortStage;
 
   const body = h('div', { style: { marginTop: '10px' } });
@@ -169,7 +169,7 @@ export function fastingCard() {
     dayLabel(f.start) + ' 開始 → ' + (over ? '預計時間是 ' : '預計 ') + dayLabel(e.end) + ((ov && (Number.isFinite(ov.start) || Number.isFinite(ov.end))) ? '（已手動修改）' : '')));
   // 3. 身體現在的狀態
   body.append(h('div', { style: { marginTop: '6px', fontWeight: 650 } }, '身體現在：' + st.text),
-    h('div.mu.tiny.one', st.nextAt != null ? '下一階段還有 ' + dur(st.nextAt - f.hours) : '已是最後階段'),
+    h('div.mu.tiny.one', st.nextAt != null ? '再 ' + dur(st.nextAt - f.hours) + ' 進入「' + FASTING.stages[st.index + 1].short + '」' + (Math.abs(f.start + st.nextAt * H - e.end) < 5 * 60000 ? '（剛好達標）' : '') : '已是最後階段'),
     tip('階段時間因人而異，僅供參考。' + (shift ? '上一餐比較豐盛，階段往後挪約 ' + shift + ' 小時。' : '')));
   // 4. 心靈雞湯
   body.append(h('div', { style: { margin: '14px 0 4px', color: 'var(--ac)', fontWeight: 650, fontSize: '17px', lineHeight: 1.6 } }, hourlyMessage(f.hours, f.start, HOURLY_MESSAGES)));

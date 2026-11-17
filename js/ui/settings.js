@@ -202,12 +202,22 @@ function prefsCard() {
   theme.value = L.theme; theme.onchange = () => { L.theme = theme.value; commitLocal(); applyTheme(); drawSumP(); };
   const FS = [['0.9', '小'], ['1', '標準'], ['1.15', '大'], ['1.3', '特大']];
   const fs = pills(FS, String(+L.fontScale || 1), v => { L.fontScale = +v; commitLocal(); document.documentElement.style.zoom = +v === 1 ? '' : v; drawSumP(); });
+  const tog = (key, label, hint) => {
+    const c = h('input', { type: 'checkbox', checked: L[key] !== false });
+    c.onchange = () => { L[key] = c.checked; commitLocal(); };
+    return h('div', h('label.row', { style: { color: 'var(--tx)', marginTop: '10px', fontSize: '15px' } }, c, label), hint ? h('div.mu.tiny', hint) : null);
+  };
+  const fxBox = h('div', { style: { marginTop: '6px' } },
+    tog('fxVisual', '按「結束進餐」「結束斷食」時的特效'),
+    tog('fxSound', '音效（合成的時間停止聲、齒輪聲）'),
+    tog('fxVoice', '語音念出「砸瓦魯多」', '用手機內建的語音念出。手機靜音時可能聽不到；部分手機的 app 版不支援語音。'));
   const ask = h('input', { type: 'checkbox', checked: L.askBackup !== false });
   ask.onchange = () => { L.askBackup = ask.checked; commitLocal(); };
   const th = h('input', { type: 'checkbox', checked: !!L.keepThumbs });
   th.onchange = () => { L.keepThumbs = th.checked; commitLocal(); drawSumP(); };
   card.append(h('label', { style: { marginTop: 0 } }, '外觀顏色'), theme,
     h('label', '字體大小'), fs,
+    h('label', '斷食按鈕的特效'), fxBox,
     h('label.row', { style: { color: 'var(--tx)', marginTop: '14px', fontSize: '15px' } }, th, '保存餐點的小張照片（會占用手機空間）'),
     h('div.mu.tiny', '預設不保存照片，只保存辨識出來的食物和營養。'),
     h('label.row', { style: { color: 'var(--tx)', marginTop: '14px', fontSize: '15px' } }, ask, '修改記錄後，如果還沒連線 Google Drive，就問我要不要存檔'),

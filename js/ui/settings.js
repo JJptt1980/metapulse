@@ -6,7 +6,7 @@ import { bmrMifflin, ageFrom } from '../points.js';
 import { libraryManager } from './library.js';
 import { itemCard } from './mealEditor.js';
 import { analyzeMeal, listModels, DEFAULT_MODELS } from '../gemini.js';
-import { normalizeState } from '../storage.js';
+import { driveCard, backupTextCard, syncImportCard } from './backup.js';
 
 const r1 = x => Math.round(x * 10) / 10;
 
@@ -60,11 +60,12 @@ function profileCard() {
       field('預計達成週數', bind(numIn(P.targetWeeks, { inputmode: 'numeric', placeholder: '可留空' }), 'targetWeeks'))),
     field('沒填週數時，每週減重 (% 體重)', pctIn, '預設 ' + BUDGET.defaultWeeklyLossPct + '%，上限 ' + BUDGET.maxWeeklyLossPct + '%。有填週數時以週數推算。'),
     field('活動係數（算 TDEE 用）', actSel),
-    fold('prof-adv', h('span.small.mu', '進階：基礎代謝、蛋白質、保底'), [
+    fold('prof-adv', h('span.small.mu', '進階：基礎代謝、蛋白質、保底、半衰期'), [
       field('基礎代謝 BMR (kcal)', bmrIn, bmrEst),
       h('div.grid2',
         field('蛋白質目標 (g/kg)', bind(numIn(P.proteinPerKg, { placeholder: '1.2' }), 'proteinPerKg')),
         field('每日保底 (點)', floorIn, '預設 = BMR ÷ 40')),
+      field('藥物半衰期（小時）', bind(numIn(P.halfLife, { placeholder: '120' }), 'halfLife'), 'Tirzepatide 約 120 小時，Semaglutide 約 160 小時。用於預估體內殘留。'),
     ]),
     sum);
 
@@ -161,43 +162,23 @@ function prefsCard() {
   const card = h('div.card', h('h2', '外觀與隱私'));
   const theme = h('select', h('option', { value: 'auto' }, '跟隨系統'), h('option', { value: 'light' }, '淺色'), h('option', { value: 'dark' }, '深色'));
   theme.value = L.theme; theme.onchange = () => { L.theme = theme.value; commitLocal(); applyTheme(); };
+  const ask = h('input', { type: 'checkbox', checked: L.askBackup !== false });
+  ask.onchange = () => { L.askBackup = ask.checked; commitLocal(); };
   const th = h('input', { type: 'checkbox', checked: !!L.keepThumbs });
   th.onchange = () => { L.keepThumbs = th.checked; commitLocal(); };
   card.append(h('label', '主題'), theme,
     h('label.row', { style: { color: 'var(--tx)', marginTop: '14px', fontSize: '15px' } }, th, '保存餐點縮圖（200px，會占用本機空間）'),
-    h('div.mu.tiny', '預設不保存照片，只保存辨識結果。'));
+    h('div.mu.tiny', '預設不保存照片，只保存辨識結果。'),
+    h('label.row', { style: { color: 'var(--tx)', marginTop: '14px', fontSize: '15px' } }, ask, '修改記錄後，若尚未連線 Google Drive 就詢問是否備份'),
+    h('div.mu.tiny', '這些設定只存在這台裝置，不列入備份。'));
   return card;
-}
-
-function dataCard() {
-  const ta = h('textarea', { rows: 4, placeholder: '備份文字' });
-  const msg = h('div.mu.small', { style: { marginTop: '6px' } });
-  const body = [
-    h('div.mu.small', 'Google Drive 備份與「從同步版匯入」會在下一階段加入。在那之前，可以先用備份文字另存。'),
-    ta,
-    h('div.grid2',
-      h('button.ghost.full', { type: 'button', onclick: () => { ta.value = JSON.stringify(S); ta.select(); msg.textContent = '已產生（' + S.meals.length + ' 筆餐點、' + S.foodLibrary.length + ' 項常用食物），請全選複製另存。'; } }, '產生備份文字'),
-      h('button.ghost.full', {
-        type: 'button', onclick: () => {
-          try {
-            const p = JSON.parse(ta.value.replace(/```(json)?/g, '').trim());
-            if (!p || !Array.isArray(p.meals)) throw 0;
-            const n = normalizeState(p);
-            Object.keys(S).forEach(k => delete S[k]); Object.assign(S, n);
-            commit(); msg.textContent = '已還原 ' + S.meals.length + ' 筆餐點。'; toast('已還原');
-          } catch (e) { msg.textContent = '格式不正確，請貼上完整的 MetaPulse 備份文字。'; }
-        },
-      }, '從文字還原')),
-    msg,
-  ];
-  return h('div.card', fold('data', h('h2', { style: { margin: 0 } }, '備份與資料'), body));
 }
 
 export function renderSettings(root) {
   root.textContent = '';
-  root.append(profileCard(), aiCard(),
+  root.append(driveCard(), profileCard(), aiCard(), syncImportCard(),
     h('div.card', fold('lib', h('h2', { style: { margin: 0 } }, '常用食物庫'), [h('div', { style: { marginTop: '10px' } }, libraryManager(itemCard))])),
-    prefsCard(), dataCard(),
+    prefsCard(), backupTextCard(),
     h('div.card', fold('legal', h('h2', { style: { margin: 0 } }, '關於本 app 與免責聲明'), [h('div', { style: { marginTop: '10px' } }, legal())])),
     h('p.mu.small', { style: { textAlign: 'center', margin: '18px 0 6px' } }, '覺得好用？', h('a', { href: 'https://ko-fi.com/killnopig', target: '_blank', rel: 'noopener', style: { color: 'var(--ac)' } }, '請我喝杯咖啡'), '（自願，不影響任何功能）'));
 }

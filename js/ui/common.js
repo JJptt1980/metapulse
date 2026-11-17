@@ -8,7 +8,7 @@ export function h(tag, props, ...kids) {
   const [t, ...cls] = tag.split('.');
   const el = document.createElement(t || 'div');
   if (cls.length) el.className = cls.join(' ');
-  if (props && (typeof props !== 'object' || props instanceof Node || Array.isArray(props))) { kids.unshift(props); props = null; }
+  if (props != null && (typeof props !== 'object' || props instanceof Node || Array.isArray(props))) { kids.unshift(props); props = null; }
   for (const k in props || {}) {
     const v = props[k];
     if (v == null || v === false) continue;

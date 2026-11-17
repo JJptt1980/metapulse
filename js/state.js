@@ -1,5 +1,5 @@
 /* 執行期狀態：S（會備份）、L（只存在這台裝置），以及變更通知 */
-import { loadState, loadLocal, saveState, saveLocal } from './storage.js';
+import { loadState, loadLocal, saveState, saveLocal, KEY } from './storage.js';
 import { budget } from './points.js';
 
 export const S = loadState();
@@ -11,7 +11,19 @@ export const onChange = fn => subs.add(fn);
 /** 修改 S 後呼叫：存檔並通知各畫面重畫 */
 export function commit() {
   const ok = saveState(S);
-  subs.forEach(fn => { try { fn(); } catch (e) { console.error(e); } });
+  notify({});
+  return ok;
+}
+function notify(ev) { subs.forEach(fn => { try { fn(ev); } catch (e) { console.error(e); } }); }
+
+/** 整份換掉（還原、從雲端載入）。fromRemote=true 時保留原本的 ts，且不觸發自動備份 */
+export function replaceState(n, fromRemote = false) {
+  Object.keys(S).forEach(k => delete S[k]);
+  Object.assign(S, n);
+  let ok = true;
+  if (fromRemote) { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { ok = false; } }
+  else ok = saveState(S);
+  notify({ remote: fromRemote, replaced: true });
   return ok;
 }
 export function commitLocal() { saveLocal(L); }

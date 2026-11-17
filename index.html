@@ -11,11 +11,11 @@
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <script>
 /* 版本號：發布新版時改這裡。版本檢查會比對線上 index.html 的這一行。 */
-window.APP_VERSION='0.2.0';
+window.APP_VERSION='0.3.0';
 /* 主題先套用，避免閃一下 */
 try{var _l=JSON.parse(localStorage.getItem('metapulse-local')||'{}');if(_l.theme==='light'||_l.theme==='dark')document.documentElement.setAttribute('data-theme',_l.theme)}catch(e){}
 /* 每個模組加上 ?v=版本，更新後不會吃到舊的快取 */
-(function(){var f=['app','config','points','units','foods','storage','gemini','state','advice','ui/advice','ui/common','ui/today','ui/addMeal','ui/mealEditor','ui/settings','ui/library'],m={};
+(function(){var f=['app','config','points','units','foods','storage','gemini','state','advice','ui/advice','records','migrate','drive','ui/log','ui/charts','ui/backup','ui/common','ui/today','ui/addMeal','ui/mealEditor','ui/settings','ui/library'],m={};
 f.forEach(function(n){m['./js/'+n+'.js']='./js/'+n+'.js?v='+window.APP_VERSION});
 var s=document.createElement('script');s.type='importmap';s.textContent=JSON.stringify({imports:m});document.head.appendChild(s)})();
 </script>
@@ -23,14 +23,14 @@ var s=document.createElement('script');s.type='importmap';s.textContent=JSON.str
 :root{
   --bg:#f6f7f6;--card:#fff;--tx:#17201c;--mu:#66726c;--ln:#e3e7e4;--soft:#eef2ef;
   --ac:#0f7b5f;--ac-soft:#e2f1eb;--act:#fff;--warn:#b45309;--warn-soft:#fdf1e3;--bad:#b42318;
-  --r:16px;color-scheme:light;
+  --r:16px;color-scheme:light;--c1:#3b6fd8;--c3:#7c3aed;--c4:#0e7490;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#0f1311;--card:#171c19;--tx:#e7ece9;--mu:#91a097;--ln:#26302b;--soft:#1e2522;
-  --ac:#3ccf9a;--ac-soft:#173328;--act:#07140f;--warn:#f0a14a;--warn-soft:#33240f;--bad:#f2766b;color-scheme:dark}}
+  --ac:#3ccf9a;--ac-soft:#173328;--act:#07140f;--warn:#f0a14a;--warn-soft:#33240f;--bad:#f2766b;color-scheme:dark;--c1:#7aa2ff;--c3:#b69cff;--c4:#4fd1e8}}
 :root[data-theme="dark"]{
   --bg:#0f1311;--card:#171c19;--tx:#e7ece9;--mu:#91a097;--ln:#26302b;--soft:#1e2522;
-  --ac:#3ccf9a;--ac-soft:#173328;--act:#07140f;--warn:#f0a14a;--warn-soft:#33240f;--bad:#f2766b;color-scheme:dark}
+  --ac:#3ccf9a;--ac-soft:#173328;--act:#07140f;--warn:#f0a14a;--warn-soft:#33240f;--bad:#f2766b;color-scheme:dark;--c1:#7aa2ff;--c3:#b69cff;--c4:#4fd1e8}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.55 system-ui,-apple-system,"Segoe UI","Noto Sans TC","PingFang TC",sans-serif;
@@ -132,6 +132,7 @@ nav.tabs button[hidden]{display:none}
 <main>
   <div id="upd" class="card notice ok" style="display:none;cursor:pointer;text-align:center;font-weight:600">有新版本 <span id="nv"></span>，點此更新</div>
   <header><h1>MetaPulse</h1><span id="ver" class="mu small"></span></header>
+  <div id="sync" class="mu tiny" style="margin:-10px 2px 12px;cursor:pointer"></div>
 
   <section id="p-today" class="pane on"></section>
   <section id="p-log" class="pane"></section>
@@ -141,8 +142,8 @@ nav.tabs button[hidden]{display:none}
 
 <nav class="tabs"><div class="in">
   <button data-t="today" class="on"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>今日</button>
-  <button data-t="log" hidden><svg class="i" viewBox="0 0 24 24"><path d="M8 6h11M8 12h11M8 18h11"/><circle cx="4" cy="6" r=".6"/><circle cx="4" cy="12" r=".6"/><circle cx="4" cy="18" r=".6"/></svg>記錄</button>
-  <button data-t="chart" hidden><svg class="i" viewBox="0 0 24 24"><path d="M4 19h16M6 15l4-4 3 3 5-6"/></svg>圖表</button>
+  <button data-t="log"><svg class="i" viewBox="0 0 24 24"><path d="M8 6h11M8 12h11M8 18h11"/><circle cx="4" cy="6" r=".6"/><circle cx="4" cy="12" r=".6"/><circle cx="4" cy="18" r=".6"/></svg>記錄</button>
+  <button data-t="chart"><svg class="i" viewBox="0 0 24 24"><path d="M4 19h16M6 15l4-4 3 3 5-6"/></svg>圖表</button>
   <button data-t="set"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3.9a7 7 0 0 0-2-1.2L14.2 3h-4.4l-.4 2.6a7 7 0 0 0-2 1.2l-2.3-.9-2 3.4 2 1.5A7 7 0 0 0 5 12a7 7 0 0 0 .1 1.2l-2 1.5 2 3.4 2.3-.9a7 7 0 0 0 2 1.2l.4 2.6h4.4l.4-2.6a7 7 0 0 0 2-1.2l2.3.9 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z"/></svg>設定</button>
 </div></nav>
 
@@ -150,6 +151,8 @@ nav.tabs button[hidden]{display:none}
 <div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
 <div class="modal" id="modal"></div>
 <div id="toast" role="status" aria-live="polite"></div>
+<div id="bk-ask" class="card" style="display:none;position:fixed;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:20;margin:0 auto;max-width:536px;box-shadow:0 4px 18px rgba(0,0,0,.18)"></div>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <script type="module">import './js/app.js';</script>
 </body>

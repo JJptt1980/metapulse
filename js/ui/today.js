@@ -4,6 +4,7 @@ import { h, icon, fold, hm, WD, fmtPts } from './common.js';
 import { usage, localDate, addDays } from '../points.js';
 import { openAddMeal } from './addMeal.js';
 import { latestAdviceCard } from './advice.js';
+import { doseCard } from './log.js';
 
 const r1 = x => Math.round(x * 10) / 10;
 
@@ -80,6 +81,8 @@ export function renderToday(root) {
   }
   top.append(h('button.pri.cta', { type: 'button', onclick: () => openAddMeal() }, icon('camera'), '記一餐'));
   root.append(top);
+  const dc = doseCard(true);
+  if (dc) root.append(dc);
   const adv = latestAdviceCard();
   if (adv) root.append(adv);
 

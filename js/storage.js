@@ -53,6 +53,7 @@ export function normalizeEntry(e, i = 0) {
   o.note = str(e.note);
   o.time = /^\d{2}:\d{2}$/.test(e.time || '') ? e.time : timeFromNote(o.note);
   o.src = str(e.src);
+  o.sid = e.sid ? str(e.sid) : '';  // 從同步版匯入時，原本的 id（重複匯入用）
   return o;
 }
 

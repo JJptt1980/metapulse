@@ -1,6 +1,6 @@
 /* 設定頁：Health Connect 同步（只在 APK 中可用；網頁版顯示說明） */
 import { S, L, commit, commitLocal, uid } from '../state.js';
-import { h, toast, section, sumLine } from './common.js';
+import { h, toast, section, sumLine, tip } from './common.js';
 import { latestText } from '../records.js';
 import { isNative, healthPlugin, diagnose, readHealth, buildRecords, planHealth, applyHealth } from '../health.js';
 
@@ -18,19 +18,18 @@ export function healthCard() {
   drawSum();
   if (!native) {
     return section('hc', 'Health Connect 同步', sumEl, [
-      h('div.mu.small', { style: { lineHeight: 1.7 } },
-        'Health Connect 是 Android 手機內建的「健康資料中心」，Omron、手錶等 app 會把量到的資料放在這裡。只有安裝在手機上的 app 才能讀取，網頁版讀不到。安裝 Maple 的 APK（Android 安裝檔）後，這裡會出現同步按鈕，可以讀取血壓、脈搏、體重、體脂、基礎代謝和運動消耗的熱量。'),
+      tip('Health Connect 是 Android 手機內建的「健康資料中心」，Omron、手錶等 app 會把量到的資料放在這裡。只有安裝在手機上的 app 才能讀取，網頁版讀不到。安裝 Maple 的 APK（Android 安裝檔）後，從主畫面的 Maple 圖示打開，這裡會出現同步按鈕，可以讀取血壓、脈搏、體重、體脂、基礎代謝和運動消耗的熱量。'),
       /Android/i.test(navigator.userAgent || '') ? h('div.mu.tiny', { style: { marginTop: '6px' } }, '診斷：' + diagnose()) : null,
     ]);
   }
 
-  const days = h('select', h('option', { value: '30' }, '最近 30 天'), h('option', { value: '90' }, '最近 90 天'), h('option', { value: '365' }, '最近 1 年（要允許讀取 30 天以前的資料）'));
+  const days = h('select', h('option', { value: '30' }, '最近 30 天'), h('option', { value: '90' }, '最近 90 天'), h('option', { value: '365' }, '最近 1 年'));
   days.value = L.hcDays || '30';
   days.onchange = () => { L.hcDays = days.value; commitLocal(); };
   const all = h('input', { type: 'checkbox', checked: !!L.hcAll });
   all.onchange = () => { L.hcAll = all.checked; commitLocal(); };
   const out = h('div', { style: { marginTop: '10px' } });
-  const undo = h('button.ghost.full', { type: 'button', style: { display: hasUndo() ? '' : 'none' } }, '取消上次同步（回到同步之前）');
+  const undo = h('button.ghost.full', { type: 'button', style: { display: hasUndo() ? '' : 'none' } }, '復原上次同步');
   let last = null; // {raw, ...}
 
   const show = () => {
@@ -79,7 +78,7 @@ export function healthCard() {
     btn.disabled = false;
   };
   undo.onclick = () => {
-    if (!undo.dataset.c) { undo.dataset.c = 1; undo.textContent = '再按一次確認取消'; setTimeout(() => { undo.dataset.c = ''; undo.textContent = '取消上次同步（回到同步之前）'; }, 3000); return; }
+    if (!undo.dataset.c) { undo.dataset.c = 1; undo.textContent = '再按一次確認取消'; setTimeout(() => { undo.dataset.c = ''; undo.textContent = '復原上次同步'; }, 3000); return; }
     try {
       const p = JSON.parse(localStorage.getItem(UNDO_KEY));
       S.entries = p.entries; S.activity = p.activity; localStorage.removeItem(UNDO_KEY);
@@ -88,7 +87,8 @@ export function healthCard() {
   };
   return section('hc', 'Health Connect 同步', sumEl, [
     h('div.grid2', h('div', h('label', { style: { marginTop: 0 } }, '期間'), days), h('div')),
-    h('label.row', { style: { color: 'var(--tx)', marginTop: '10px', fontSize: '15px' } }, all, '也讀取其他 app 的資料（預設只讀 Omron 的血壓、體重）'),
+    h('label.row', { style: { color: 'var(--tx)', marginTop: '10px', fontSize: '15px' } }, all, '也讀其他 app 的資料'),
+    tip('預設只讀 Omron 的血壓和體重，避免別的 app 的資料混進來。選「最近 1 年」時，要在權限畫面允許讀取 30 天以前的資料。'),
     btn, out, undo,
   ], !L.lastHC);
 }

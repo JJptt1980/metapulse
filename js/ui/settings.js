@@ -1,6 +1,6 @@
 /* 設定分頁：個人資料與預算、AI 辨識、常用食物庫、外觀、資料、免責聲明 */
 import { S, L, commit, commitLocal, plan, currentWeight } from '../state.js';
-import { h, icon, toast, fold, pills, val, $, section, sumLine, kvTable, sectionBudget } from './common.js';
+import { h, icon, toast, fold, pills, val, $, section, sumLine, kvTable, sectionBudget, tip } from './common.js';
 import { ACTIVITY_LEVELS, BUDGET } from '../config.js';
 import { bmrMifflin, ageFrom } from '../points.js';
 import { libraryManager } from './library.js';
@@ -44,9 +44,9 @@ export const GLOSSARY = [
   ['API 金鑰', '使用 Google AI 的通行碼（API key），像密碼一樣，不要給別人。'],
   ['AI 模型', 'Google 提供的不同 AI 版本，有的比較快、有的比較準。'],
 ];
-export function glossaryCard() {
-  const sl = h('div.mu.small', { style: { marginTop: '2px', fontWeight: 400 } }, '看不懂的詞可以來這裡查');
-  return section('glossary', '名詞說明', sl, [h('div', ...GLOSSARY.map(([k, v]) => h('div', { style: { padding: '8px 0', borderTop: '1px solid var(--ln)' } }, h('b.small', k), h('div.mu.small', v))))]);
+/** 名詞說明：每個名詞一行，點了才看解釋 */
+function glossaryList() {
+  return h('div', ...GLOSSARY.map(([k, v]) => h('details', { style: { padding: '8px 0', borderTop: '1px solid var(--ln)', margin: 0 } }, h('summary', h('span.small', k)), h('div.mu.small', { style: { marginTop: '4px', whiteSpace: 'normal' } }, v))));
 }
 
 export const legal = () => h('div.legal.mu.small', DISCLAIMER.map(t => h('p', t)));
@@ -57,7 +57,7 @@ export function applyTheme() {
 }
 
 function field(label, input, hint) {
-  return h('div', h('label', label), input, hint ? h('div.mu.tiny', { style: { marginTop: '3px' } }, hint) : null);
+  return h('div', h('label', label), input, hint ? tip(hint) : null);
 }
 const numIn = (v, attrs = {}) => h('input.num', { type: 'number', inputmode: 'decimal', min: '0', step: 'any', value: v > 0 ? v : '', ...attrs });
 
@@ -80,23 +80,23 @@ function profileCard() {
 
   const hasEntryWt = S.entries.some(e => e.wt > 0);
   const weeksIn = bind(numIn(P.targetWeeks, { inputmode: 'numeric', placeholder: '可留空' }), 'targetWeeks');
-  const pctField = field('沒填週數時，每週想減體重的幾 %', pctIn, '預設 ' + BUDGET.defaultWeeklyLossPct + '%，上限 ' + BUDGET.maxWeeklyLossPct + '%。');
+  const pctField = field('每週減重 %（沒填週數時用）', pctIn, '預設 ' + BUDGET.defaultWeeklyLossPct + '%，上限 ' + BUDGET.maxWeeklyLossPct + '%。');
   const body = [
     h('div.grid2',
       field('身高 (cm)', bind(numIn(P.height), 'height')),
-      field('性別（估算基礎代謝用）', pills([['M', '男'], ['F', '女']], P.sex, v => { P.sex = v; save(); }, 'seg'))),
+      field('性別', pills([['M', '男'], ['F', '女']], P.sex, v => { P.sex = v; save(); }, 'seg'))),
     h('div.grid2',
       field('出生年（西元）', bind(numIn(P.birthYear, { inputmode: 'numeric', placeholder: '例如 1985' }), 'birthYear')),
-      field('目前體重 (kg)', bind(numIn(P.weight), 'weight'), hasEntryWt ? '已有體重記錄，會自動用最新一筆 ' + currentWeight() + ' kg' : null)),
+      h('div', h('label', '目前體重 (kg)'), bind(numIn(P.weight, hasEntryWt ? { placeholder: '自動 ' + currentWeight() } : {}), 'weight'), hasEntryWt ? h('div.mu.tiny.one', { style: { marginTop: '3px' } }, '自動用最新 ' + currentWeight() + ' kg') : null)),
     h('div.grid2',
       field('目標體重 (kg)', bind(numIn(P.targetWeight), 'targetWeight')),
       field('預計達成週數', weeksIn)),
     pctField,
     field('平常的活動量', actSel),
-    fold('prof-adv', h('span.small.mu', '進階：基礎代謝、蛋白質、每日保底、藥物半衰期'), [
+    fold('prof-adv', h('span.small.mu', '進階設定'), [
       field('基礎代謝（大卡）', bmrIn, bmrEst),
       h('div.grid2',
-        field('蛋白質目標（每公斤體重幾克）', bind(numIn(P.proteinPerKg, { placeholder: '1.2' }), 'proteinPerKg')),
+        field('蛋白質 g／每公斤', bind(numIn(P.proteinPerKg, { placeholder: '1.2' }), 'proteinPerKg')),
         field('每日保底（點）', floorIn, '預設＝基礎代謝 ÷ 40。提醒今天別吃太少用。')),
       field('藥物半衰期（小時）', bind(numIn(P.halfLife, { placeholder: '120' }), 'halfLife'), '半衰期＝藥在身體裡減少一半要多久。Tirzepatide（猛健樂）約 120 小時，Semaglutide（胰妥讚、週纖達）約 160 小時。用來估算體內還剩多少藥。'),
     ]),
@@ -120,7 +120,7 @@ function profileCard() {
       ['每日蛋白質', b.proteinTarget, 0, 'g'],
     ]));
     if (b.capped) sum.append(h('div.notice.small', '你設定的速度大約每週減 ' + r2(b.wantedPct) + '%，超過安全上限（每週體重的 1%），已改用 1% 計算。'));
-    sumEl.textContent = (+P.height || '–') + ' cm・' + w + ' → ' + (+P.targetWeight || '–') + ' kg・7 天 ' + b.poolPoints + ' 點・保底 ' + b.floorPoints + '・蛋白質 ' + b.proteinTarget + ' g';
+    sumEl.textContent = w + ' → ' + (+P.targetWeight || '–') + ' kg・每週 ' + b.poolPoints + ' 點';
   }
   drawSum();
   return section('prof', '個人資料與每日預算', sumEl, body, !plan().ok);
@@ -149,7 +149,7 @@ function aiCard() {
       if (sel.value === '__custom') { custom.style.display = ''; custom.value = ''; custom.focus(); return; }
       custom.style.display = 'none'; L.geminiModel = sel.value; commitLocal(); drawSumAI();
     };
-    const fetchBtn = h('button.ghost', { type: 'button', style: { whiteSpace: 'nowrap' } }, '取得可用模型');
+    const fetchBtn = h('button.ghost', { type: 'button', style: { whiteSpace: 'nowrap' } }, '取得清單');
     fetchBtn.onclick = async () => {
       fetchBtn.disabled = true; modelMsg.textContent = '查詢中…';
       try {
@@ -162,7 +162,7 @@ function aiCard() {
     modelBox.append(h('div.row', h('div.grow', sel), fetchBtn), custom);
   };
   drawModels();
-  modelMsg.textContent = L.geminiModels && L.geminiModels.length ? '' : 'AI 模型就是 Google 提供的不同 AI 版本，有的快、有的準。清單是內建的，按「取得可用模型」可以查你的帳號實際能用哪些。';
+  const modelTip = tip('AI 模型就是 Google 提供的不同 AI 版本，有的快、有的準。清單是內建的，按「取得可用模型」可以查你的帳號實際能用哪些。');
   const api = h('select', h('option', { value: 'auto' }, '自動（建議）'), h('option', { value: 'interactions' }, 'Interactions API'), h('option', { value: 'generateContent' }, 'generateContent'));
   api.value = L.geminiApi || 'auto';
   api.onchange = () => { L.geminiApi = api.value; commitLocal(); };
@@ -171,7 +171,7 @@ function aiCard() {
   const fast = h('input', { type: 'checkbox', checked: L.geminiFast !== false });
   fast.onchange = () => { L.geminiFast = fast.checked; commitLocal(); };
   const out = h('div.small', { style: { marginTop: '8px' } });
-  const test = h('button.ghost.full', { type: 'button' }, '測試連線（估算「一顆水煮蛋」）');
+  const test = h('button.ghost.full', { type: 'button' }, '測試連線');
   test.onclick = async () => {
     out.textContent = ''; out.append(h('span.spin'), ' 測試中…'); test.disabled = true;
     try {
@@ -183,37 +183,36 @@ function aiCard() {
     test.disabled = false;
   };
   drawSumAI();
-  return section('ai', 'AI 辨識食物（Google Gemini）', sumEl, [
+  return section('ai', 'AI 辨識食物', sumEl, [
     h('label', { style: { marginTop: 0 } }, 'API 金鑰'), h('div.row', h('div.grow', key), eye),
-    h('label', '模型'), modelBox, modelMsg,
-    h('label.row', { style: { color: 'var(--tx)', marginTop: '12px', fontSize: '15px' } }, fast, '速度優先（讓 AI 少想一點，回覆比較快）'),
-    h('label.row', { style: { color: 'var(--tx)', marginTop: '8px', fontSize: '15px' } }, adv, '記錄後給這一餐回饋與下一餐建議'),
-    fold('ai-adv', h('span.small.mu', '進階：連線方式（通常不用改）'), [h('label', '連線方式'), api]),
+    h('label', '模型'), modelBox, modelMsg, modelTip,
+    h('label.row', { style: { color: 'var(--tx)', marginTop: '12px', fontSize: '15px' } }, fast, '速度優先（回覆較快）'),
+    h('label.row', { style: { color: 'var(--tx)', marginTop: '8px', fontSize: '15px' } }, adv, '記錄後給飲食建議'),
+    fold('ai-adv', h('span.small.mu', '進階設定'), [h('label', '連線方式（通常不用改）'), api]),
     test, out,
-    h('div.mu.tiny', { style: { marginTop: '8px', lineHeight: 1.6 } },
-      'API 金鑰是使用 Google AI 的通行碼，像密碼一樣不要給別人。它只存在這支手機，不會放進存檔。照片和文字會直接從你的手機送到 Google 辨識。金鑰可以到 Google AI Studio 免費申請。')], !L.geminiKey);
+    tip('API 金鑰是使用 Google AI 的通行碼，像密碼一樣不要給別人。它只存在這支手機，不會放進存檔。照片和文字會直接從你的手機送到 Google 辨識。金鑰可以到 Google AI Studio 免費申請。測試連線會請 AI 估算「一顆水煮蛋」。')], !L.geminiKey);
 }
 
 /* ---------- 外觀與資料 ---------- */
 function prefsCard() {
   const sumEl = sumLine();
   const TN = { auto: '跟隨系統', light: '淺色', dark: '深色' };
-  const drawSumP = () => { sumEl.textContent = '外觀：' + TN[L.theme || 'auto'] + '・字體' + ({ 0.9: '小', 1: '標準', 1.15: '大', 1.3: '特大' }[+L.fontScale || 1] || '標準') + '・' + (L.keepThumbs ? '保存小照片' : '不存照片'); };
+  const drawSumP = () => { sumEl.textContent = TN[L.theme || 'auto'] + '・字體' + ({ 0.9: '小', 1: '預設', 1.15: '大', 1.3: '特大' }[+L.fontScale || 1] || '預設') + '・' + (L.keepThumbs ? '存小照片' : '不存照片'); };
   const card = h('div');
   const theme = h('select', h('option', { value: 'auto' }, '跟隨系統'), h('option', { value: 'light' }, '淺色'), h('option', { value: 'dark' }, '深色'));
   theme.value = L.theme; theme.onchange = () => { L.theme = theme.value; commitLocal(); applyTheme(); drawSumP(); };
-  const FS = [['0.9', '小'], ['1', '標準'], ['1.15', '大'], ['1.3', '特大']];
+  const FS = [['0.9', '小'], ['1', '預設'], ['1.15', '大'], ['1.3', '特大']];
   const fs = pills(FS, String(+L.fontScale || 1), v => { L.fontScale = +v; commitLocal(); document.documentElement.style.zoom = +v === 1 ? '' : v; drawSumP(); });
   const tog = (key, label, hint) => {
     const c = h('input', { type: 'checkbox', checked: L[key] !== false });
     c.onchange = () => { L[key] = c.checked; commitLocal(); };
-    return h('div', h('label.row', { style: { color: 'var(--tx)', marginTop: '10px', fontSize: '15px' } }, c, label), hint ? h('div.mu.tiny', hint) : null);
+    return h('div', h('label.row', { style: { color: 'var(--tx)', marginTop: '10px', fontSize: '15px' } }, c, label), hint ? tip(hint) : null);
   };
   const fxBox = h('div', { style: { marginTop: '6px' } },
-    tog('fxVisual', '按「結束進餐」「結束斷食」時的特效'),
-    tog('fxSound', '音效（合成的時間停止聲、齒輪聲）'),
-    tog('fxVoice', '語音念出「砸瓦魯多」', '用手機內建的語音念出。手機靜音時可能聽不到；部分手機的 app 版不支援語音。'));
-  const bkd = h('select', ...[['0', '不提醒'], ['3', '超過 3 天沒備份'], ['7', '超過 7 天沒備份'], ['14', '超過 14 天沒備份'], ['30', '超過 30 天沒備份']].map(([v, t]) => h('option', { value: v }, t)));
+    tog('fxVisual', '結束進餐／斷食的特效'),
+    tog('fxSound', '音效'),
+    tog('fxVoice', '語音念「砸瓦魯多」', '用手機內建的語音念出。手機靜音時可能聽不到；部分手機的 app 版不支援語音。'));
+  const bkd = h('select', ...[['0', '不提醒'], ['3', '3 天沒備份'], ['7', '7 天沒備份'], ['14', '14 天沒備份'], ['30', '30 天沒備份']].map(([v, t]) => h('option', { value: v }, t)));
   bkd.value = String(L.backupDays == null ? 7 : L.backupDays);
   bkd.onchange = () => { L.backupDays = +bkd.value; commitLocal(); };
   const ask = h('input', { type: 'checkbox', checked: L.askBackup !== false });
@@ -222,13 +221,11 @@ function prefsCard() {
   th.onchange = () => { L.keepThumbs = th.checked; commitLocal(); drawSumP(); };
   card.append(h('label', { style: { marginTop: 0 } }, '外觀顏色'), theme,
     h('label', '字體大小'), fs,
-    h('label', '斷食按鈕的特效'), fxBox,
-    h('label.row', { style: { color: 'var(--tx)', marginTop: '14px', fontSize: '15px' } }, th, '保存餐點的小張照片（會占用手機空間）'),
-    h('div.mu.tiny', '預設不保存照片，只保存辨識出來的食物和營養。'),
-    h('label', '太久沒備份的提醒'), bkd,
-    h('div.mu.tiny', '這段時間有新記錄、卻沒有存到 Google Drive 或產生存檔文字時，在「今日」最上面提醒。'),
-    h('label.row', { style: { color: 'var(--tx)', marginTop: '14px', fontSize: '15px' } }, ask, '修改記錄後，如果還沒連線 Google Drive，就問我要不要存檔'),
-    h('div.mu.tiny', '這些設定只存在這支手機，不會放進存檔。'));
+    h('label', '斷食按鈕'), fxBox,
+    h('label.row', { style: { color: 'var(--tx)', marginTop: '14px', fontSize: '15px' } }, th, '保存餐點小照片'),
+    h('label', '太久沒備份時提醒'), bkd,
+    h('label.row', { style: { color: 'var(--tx)', marginTop: '14px', fontSize: '15px' } }, ask, '改完問我要不要存到雲端'),
+    tip('小照片：預設不保存照片，只保存辨識出來的食物和營養；打開會占用手機空間。', h('br'), '備份提醒：這段時間有新記錄、卻沒有存到 Google Drive 或產生存檔文字時，在「今日」最上面提醒。', h('br'), '存到雲端：還沒連線 Google Drive 時，改完記錄會問你要不要連線存檔。', h('br'), '這些設定只存在這支手機，不會放進存檔。'));
   drawSumP();
   return section('prefs', '外觀與提醒', sumEl, [card]);
 }
@@ -236,15 +233,14 @@ function prefsCard() {
 export function renderSettings(root) {
   root.textContent = '';
   sectionBudget.left = 1;
-  root.append(h('a.card', { href: 'guide.html', style: { display: 'block', textDecoration: 'none', color: 'var(--tx)' } },
-    h('div.row.between', h('div', h('b', '搬家說明'), h('div.mu.small', '把同步版、Omron、Health Connect、Excel 的資料整合到 Maple')), h('span.mu', '›'))),
-    healthCard(), omronCard(), backupCard(), profileCard(), aiCard(),
+  root.append(healthCard(), omronCard(), backupCard(), profileCard(), aiCard(),
     (() => { const sl = sumLine(); sl.textContent = S.foodLibrary.length ? S.foodLibrary.length + ' 項' : '還沒有常用食物'; return section('lib', '常用食物庫', sl, [libraryManager(itemCard)]); })(),
     prefsCard(),
-    glossaryCard(),
-    section('legal', '關於本 app 與免責聲明', null, [legal()]),
-    dangerCard(),
-    h('p.mu.small', { style: { textAlign: 'center', margin: '18px 0 6px' } }, '覺得好用？', h('a', { href: 'https://ko-fi.com/killnopig', target: '_blank', rel: 'noopener', style: { color: 'var(--ac)' } }, '請我喝杯咖啡'), '（自願，不影響任何功能）'));
+    (() => { const sl = sumLine(); sl.textContent = '名詞說明・免責聲明・清除資料'; return section('other', '其他', sl, [
+      fold('other-glossary', h('span.small', '名詞說明'), [glossaryList()]),
+      fold('other-legal', h('span.small', '關於本 app 與免責聲明'), [h('div', { style: { marginTop: '8px' } }, legal())]),
+      dangerCard()]); })(),
+    h('p.mu.small.one', { style: { textAlign: 'center', margin: '18px 0 6px' } }, '覺得好用？', h('a', { href: 'https://ko-fi.com/killnopig', target: '_blank', rel: 'noopener', style: { color: 'var(--ac)' } }, '請我喝杯咖啡'), '（自願）'));
 }
 
 /** 首次開啟的免責聲明 */

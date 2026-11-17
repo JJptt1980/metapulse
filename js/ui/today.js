@@ -93,11 +93,10 @@ export function renderToday(root) {
       h('div.ring', ring(pool ? Math.max(0, left) / pool : 0, over),
         h('div.c', h('span.mu.tiny', over ? '超出' : '7 天還剩'), h('b.num', fmtPts(Math.abs(left))), h('span.mu.tiny.num', '/ ' + fmtPts(pool) + ' 點'))),
       h('div',
-        metric('今日點數', u.today.points, b.floorPoints, '點', u.today.points < b.floorPoints ? '保底＝提醒今天別吃太少，不是一定要吃到' : '已達今日保底', false),
+        metric('今日／保底', u.today.points, b.floorPoints, '點', null, false),
         metric('蛋白質', u.today.protein, b.proteinTarget, 'g', null, false))));
-    top.append(h('div.mu.tiny.num', { style: { marginTop: '10px' } },
-      '近 7 天（' + md(u.from) + '～今天）已用 ' + fmtPts(u.rolling) + ' 點 · 今日 ' + Math.round(u.today.kcal) + ' 大卡'
-      + (ex.rolling ? ' · 運動加回 +' + fmtPts(ex.rolling) + ' 點' + (ex.todayKcal ? '（今天 ' + ex.todayKcal + ' 大卡）' : '') : '')));
+    top.append(h('div.mu.tiny.num.one', { style: { marginTop: '10px' } },
+      '7 天用 ' + fmtPts(u.rolling) + ' 點・今日 ' + Math.round(u.today.kcal) + ' 大卡' + (ex.rolling ? '・運動 +' + fmtPts(ex.rolling) : '')));
   }
   top.append(h('button.pri.cta', { type: 'button', onclick: () => openAddMeal() }, icon('camera'), '記一餐'));
   root.append(top);
@@ -130,12 +129,14 @@ export function renderToday(root) {
   const recent = groups.filter(g => { const d = localDate(g.at); return d < todayStr && d >= from7; });
   const older = groups.filter(g => localDate(g.at) < from7);
   if (recent.length || older.length) {
+    const past = h('div');
+    const listCardPast = { append: (...k) => past.append(...k) };
     const byDay = new Map();
     for (const g of recent) { const d = localDate(g.at); if (!byDay.has(d)) byDay.set(d, []); byDay.get(d).push(g); }
     for (const [d, gs] of byDay) {
       const pts = gs.reduce((a, g) => a + g.points, 0), pro = gs.reduce((a, g) => a + g.protein, 0);
       const l = h('div.list'); gs.forEach(g => l.append(mealRow(g)));
-      listCard.append(fold('day-' + d, h('span.small.num', md(d) + '（' + wd(d) + '）・' + gs.length + ' 餐・' + fmtPts(pts) + ' 點・蛋白質 ' + Math.round(pro) + ' g'), l, { cls: 'daygrp' }));
+      listCardPast.append(fold('day-' + d, h('span.small.num', md(d) + '（' + wd(d) + '）・' + gs.length + ' 餐・' + fmtPts(pts) + ' 點・蛋白質 ' + Math.round(pro) + ' g'), l, { cls: 'daygrp' }));
     }
     const byMon = new Map();
     for (const g of older) { const k = localDate(g.at).slice(0, 7); if (!byMon.has(k)) byMon.set(k, []); byMon.get(k).push(g); }
@@ -143,8 +144,9 @@ export function renderToday(root) {
       const days = new Set(gs.map(g => localDate(g.at))).size;
       const pts = gs.reduce((a, g) => a + g.points, 0);
       const l = h('div.list'); gs.forEach(g => l.append(h('div.mu.tiny', { style: { marginTop: '6px' } }, md(localDate(g.at)) + '（' + wd(localDate(g.at)) + '）'), mealRow(g)));
-      listCard.append(fold('mon-' + k, h('span.small.num', +k.slice(5) + ' 月・' + gs.length + ' 餐・平均每天 ' + fmtPts(pts / days) + ' 點'), l, { cls: 'daygrp' }));
+      listCardPast.append(fold('mon-' + k, h('span.small.num', +k.slice(5) + ' 月・' + gs.length + ' 餐・平均每天 ' + fmtPts(pts / days) + ' 點'), l, { cls: 'daygrp' }));
     }
+    listCard.append(fold('past-meals', h('span.small', '以前的餐點'), [past], { cls: 'daygrp' }));
   }
   root.append(listCard);
   showAllMeals = false; // 下次重畫回到只顯示前幾餐

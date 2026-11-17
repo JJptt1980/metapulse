@@ -59,9 +59,10 @@ function overlay() {
   cancel.focus();
 }
 
+/** 「其他」卡裡的危險區：一顆紅色按鈕，按了才跳出紅色警戒 */
 export function dangerCard() {
-  return h('div.card', { style: { borderColor: '#dc2626', borderWidth: '2px' } },
-    h('h2', { style: { margin: '0 0 4px', color: '#dc2626' } }, '危險區'),
-    h('div.mu.small', '把這支手機上的 Maple 清空，回到剛安裝時的樣子。Google Drive 雲端的存檔不會被動到。'),
-    h('button.full', { type: 'button', onclick: overlay, style: { marginTop: '10px', background: '#dc2626', color: '#fff', border: '0', fontWeight: 700 } }, '清除全部資料，回到預設值'));
+  return h('div', { style: { marginTop: '14px', paddingTop: '12px', borderTop: '2px solid #dc2626' } },
+    h('div.small', { style: { color: '#dc2626', fontWeight: 700 } }, '危險區'),
+    h('button.full', { type: 'button', onclick: overlay, style: { marginTop: '8px', background: '#dc2626', color: '#fff', border: '0', fontWeight: 700 } }, '清除全部資料，回到預設值'),
+    h('div.mu.tiny.one', { style: { marginTop: '4px' } }, '只清這支手機，雲端存檔不會動'));
 }

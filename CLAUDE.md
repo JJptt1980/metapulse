@@ -13,7 +13,8 @@ The full product spec is `PROMPT.md`. It is gitignored and must never be committ
 - Reply in Traditional Chinese. UI text must be readable at a 7th-grade level; add a short note when a term needs one.
 - When the user gives new requirements or feedback, first reply with a plan. Don't edit, commit, or deploy until the user says 「可以」 or 「可以做」.
 - Shell commands given to the user must be zsh-pasteable: chain with `&&`, no `#` comments.
-- Each tab should be at most about two phone screens long. Put secondary content in collapsible `fold()` sections.
+- Minimal UI. Each tab must stay within two phone screens (about 1600px at 412px wide, with folds in their default state). Put secondary content in collapsible `fold()` sections.
+- Every option, button, label, and fold summary must fit on one line. Shorten the text; CSS ellipsis is only a fallback. Explanatory text goes inside `tip()` from `ui/common.js`, which shows a one-line "ⓘ 說明" that expands on tap.
 
 ## Commands
 

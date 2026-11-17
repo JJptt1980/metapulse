@@ -1,6 +1,6 @@
 /* 記錄分頁：體重計／血壓計／注射三張儀器卡（輸入與顯示一致）＋記錄列表 */
 import { S, L, commit, commitLocal, uid } from '../state.js';
-import { h, icon, toast, fold, pills, openSheet, closeSheet, val } from './common.js';
+import { h, icon, toast, fold, pills, openSheet, closeSheet, val, tip } from './common.js';
 import { localDate, addDays } from '../points.js';
 import { leanSummary } from '../longterm.js';
 import { leanStatus } from './fasting.js';
@@ -90,7 +90,7 @@ function addBtn(type, label) {
 }
 /** 卡片標題列：標題＋一行摘要＋按鈕；body 為展開內容（沒有就不收合） */
 function deviceCard(key, title, summary, btn, body, { force = false, accent = false } = {}) {
-  const head = h('div.row.grow', h('div.grow', h('h2', { style: { margin: 0 } }, title), h('div.small.num', { style: { marginTop: '2px', color: accent ? 'var(--ac)' : '', fontWeight: accent ? 650 : 400 } }, summary)), btn);
+  const head = h('div.row.grow', h('div.grow', h('h2', { style: { margin: 0 } }, title), h('div.small.num.one', { style: { marginTop: '2px', color: accent ? 'var(--ac)' : '', fontWeight: accent ? 650 : 400 } }, summary)), btn);
   const card = h('div.card', accent ? { style: { borderColor: 'var(--ac)' } } : null);
   card.append(body ? fold(key, head, [body], { open: false, force }) : head);
   return card;
@@ -101,7 +101,7 @@ function scaleCard(es) {
   if (!w && !lastOf(es, TYPES.bc)) return deviceCard('dev-scale', '體重計', '還沒有記錄', addBtn('wt', '記錄'));
   const b = w ? bmi(w.wt, S.profile.height) : null;
   const tw = +S.profile.targetWeight;
-  const summary = (w ? w.wt + ' kg' : '–') + (b ? '・BMI ' + r1(b.value) + '（' + b.label + '）' : '') + (w && tw ? (w.wt > tw ? '・距目標 ' + r1(w.wt - tw) + ' kg' : '・已達目標') : '');
+  const summary = (w ? w.wt + ' kg' : '–') + (b ? '・BMI ' + r1(b.value) : '') + (w && tw ? (w.wt > tw ? '・差 ' + r1(w.wt - tw) + ' kg' : '・已達目標') : '');
   const more = [];
   if (w) more.push(stat('體重 · ' + md(w.date), w.wt, 'kg'));
   for (const [k, label, unit] of [['fat', '體脂率', '%'], ['mus', '骨骼肌率', '%'], ['vis', '內臟脂肪', ''], ['bage', '身體年齡', '歲'], ['bmr', '基礎代謝', '大卡']]) {
@@ -112,8 +112,8 @@ function scaleCard(es) {
   if (lm) more.push(stat('淨體重 · ' + md(lm.date), r1(leanMass(lm)), 'kg'));
   const lsum = leanSummary(leanStatus());
   const body = h('div', { style: { marginTop: '10px' } }, h('div.grid3', { style: { rowGap: '12px' } }, ...more),
-    lsum ? h('div.small.num', { style: { marginTop: '8px', fontWeight: 600, color: lsum.tone === 'good' ? 'var(--ac)' : lsum.tone === 'mid' ? '#ca8a04' : 'var(--warn)' } }, lsum.line, h('span.mu.tiny', { style: { fontWeight: 400 } }, '（詳細說明在「今日」或「圖表」）')) : null,
-    !S.profile.height ? h('div.mu.tiny', { style: { marginTop: '6px' } }, '在設定填身高後，可以顯示 BMI（身體質量指數）。') : null);
+    lsum ? h('div.small.num', { style: { marginTop: '8px', fontWeight: 600, color: lsum.tone === 'good' ? 'var(--ac)' : lsum.tone === 'mid' ? '#ca8a04' : 'var(--warn)' } }, lsum.line) : null,
+    !S.profile.height ? h('div.mu.tiny.one', { style: { marginTop: '6px' } }, '設定身高後顯示 BMI') : null);
   return deviceCard('dev-scale', '體重計', summary, addBtn('wt', '記錄'), body);
 }
 
@@ -141,7 +141,7 @@ export function doseCard(compact) {
       stat('最近一次 · ' + md(nd.last.date), nd.last.dose, 'mg'),
       stat('預估體內藥量', r1(ob), 'mg')),
     h('button' + (due ? '.pri' : '.ghost') + '.full', { type: 'button', onclick: () => openEntry({ type: 'dose' }) }, '記錄這次注射'),
-    h('div.mu.tiny', { style: { marginTop: '6px' } }, '體內藥量是用藥物半衰期粗略算的，只用來看變化，不是驗血結果，不能用來決定劑量。'));
+    tip('體內藥量是用藥物半衰期粗略算的，只用來看變化，不是驗血結果，不能用來決定劑量。'));
   let force = false;
   if (due && L.doseForced !== nd.due + (compact ? 't' : 'l')) { force = true; L.doseForced = nd.due + (compact ? 't' : 'l'); commitLocal(); }
   return deviceCard('dose-card', '注射', line, null, body, { force, accent: due });

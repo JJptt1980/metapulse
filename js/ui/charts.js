@@ -1,12 +1,12 @@
 /* 圖表分頁：移植同步版的圖表（體重、劑量與殘留、血壓、BMI、體組成、身體年齡／基礎代謝）
  * Chart.js 4.4.1 在第一次開啟圖表頁時才從 cdnjs 載入。圖表卡片可收合，收起來的不畫。 */
 import { S, L, commitLocal, plan } from '../state.js';
-import { h, fold, pills, toast } from './common.js';
+import { h, fold, pills, toast, tip } from './common.js';
 import { buildSummary } from '../summary.js';
 import { capPlugin } from '../health.js';
 import { localDate } from '../points.js';
 import { sortEntries, onBoard, dn, fromDn, md, wdOf } from '../records.js';
-import { longTermStatusCard, leanStatusCard } from './fasting.js';
+import { longTermStatusCard, leanParts } from './fasting.js';
 
 const CHART_URL = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
 let loading = null;
@@ -254,7 +254,8 @@ async function copyText(t, ta) {
 }
 
 function aiCard(range, bpv) {
-  const msg = h('div.mu.tiny', { style: { marginTop: '8px', lineHeight: 1.6 } }, '把所有圖表合成一張圖，或把數據整理成一段文字，貼給 AI（例如 ChatGPT、Gemini）幫你看趨勢、整理要問醫師的問題。裡面有你的健康資料，傳給 AI 前請自己評估隱私。');
+  const msg = h('div.mu.tiny', { style: { marginTop: '8px', lineHeight: 1.6 } });
+  const aiTip = tip('把所有圖表合成一張圖，或把數據整理成一段文字，貼給 AI（例如 ChatGPT、Gemini）幫你看趨勢、整理要問醫師的問題。數據摘要包含飲食點數、熱量、蛋白質和斷食時數。勾選「加上給 AI 的說明」會在開頭請 AI 分析、不要診斷。裡面有你的健康資料，傳給 AI 前請自己評估隱私。');
   const withPrompt = h('input', { type: 'checkbox', checked: L.sumPrompt !== false });
   withPrompt.onchange = () => { L.sumPrompt = withPrompt.checked; commitLocal(); };
   const ta = h('textarea', { rows: 6, readOnly: true, style: { display: 'none', marginTop: '8px' } });
@@ -284,7 +285,7 @@ function aiCard(range, bpv) {
     catch (e) { toast('這裡不能複製圖片，請改用「分享或儲存」', true); }
   };
   imgBtns.append(share, copyImg);
-  const sum = h('button.ghost.full', { type: 'button', style: { marginTop: '8px' } }, '複製數據摘要（文字）');
+  const sum = h('button.ghost.full', { type: 'button', style: { marginTop: '8px' } }, '複製數據摘要');
   sum.onclick = async () => {
     const t = buildSummary(S, plan(), localDate(new Date()), withPrompt.checked);
     ta.value = t;
@@ -293,8 +294,8 @@ function aiCard(range, bpv) {
   };
   return h('div.card', fold('chart-ai', h('h2', { style: { margin: 0 } }, '給 AI 分析'), [h('div', { style: { marginTop: '10px' } },
     shot, sum,
-    h('label.row', { style: { color: 'var(--tx)', marginTop: '10px', fontSize: '15px' } }, withPrompt, '文字開頭加上給 AI 的說明（請它分析、不要診斷）'),
-    msg, ta, img, imgBtns)], { open: false }));
+    h('label.row', { style: { color: 'var(--tx)', marginTop: '10px', fontSize: '15px' } }, withPrompt, '加上給 AI 的說明'),
+    aiTip, msg, ta, img, imgBtns)], { open: false }));
 }
 
 let live = [];
@@ -307,7 +308,7 @@ export async function renderCharts(root) {
   if (!any) { root.append(h('div.card', h('div.empty', '還沒有可以畫圖的資料。到「記錄」新增，或到「設定」→「備份與匯入」把同步版的記錄搬過來。'))); root.append(longTermStatusCard()); return; }
   const range = L.chartRange || 'all', bpv = L.chartBp || 'all';
   root.append(h('div.card', h('div.row.between', h('b.small', '範圍'), pills([['30', '近 30 天'], ['90', '近 90 天'], ['all', '全部']], range, v => { L.chartRange = v; commitLocal(); renderCharts(root); })),
-    h('div.mu.tiny', { style: { marginTop: '6px' } }, '只影響圖表，不會刪除任何記錄。手指左右拖曳可查看當天數值。')));
+    ));
   const wait = h('div.card', h('div.row.small.mu', h('span.spin'), '正在準備圖表…'));
   root.append(wait);
   try { await loadChart(); } catch (e) {
@@ -324,8 +325,10 @@ export async function renderCharts(root) {
     const body = [];
     if (sp.id === 'bp') body.push(h('div', { style: { margin: '10px 0 4px' } }, pills([['all', '全部量測'], ['day', '每日平均'], ['ampm', '早／晚分開']], bpv, v => { L.chartBp = v; commitLocal(); renderCharts(root); })));
     body.push(h('div', { style: { position: 'relative', height: '250px', marginTop: '10px' } }, cv));
-    if (sp.note) body.push(h('div.mu.tiny', { style: { marginTop: '6px' } }, sp.note));
-    const d = fold('chart-' + sp.id, h('h2', { style: { margin: 0 } }, sp.title), body, { open: !!OPEN_DEFAULT[sp.id] });
+    if (sp.note) body.push(tip(sp.note));
+    let head = h('h2', { style: { margin: 0 } }, sp.title);
+    if (sp.id === 'lean') { const lp = leanParts(); head = h('div.grow', head, lp.sum); body.push(h('div', { style: { marginTop: '10px' } }, lp.body)); }
+    const d = fold('chart-' + sp.id, head, body, { open: !!OPEN_DEFAULT[sp.id] });
     let chart = null;
     const draw = () => {
       if (chart || !d.open) return;
@@ -335,7 +338,6 @@ export async function renderCharts(root) {
     d.addEventListener('toggle', draw);
     root.append(h('div.card', d));
     draw();
-    if (sp.id === 'lean') { const ls = leanStatusCard(); if (ls) root.append(ls); }
   }
   root.append(longTermStatusCard());
 }

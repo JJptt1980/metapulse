@@ -90,6 +90,10 @@ export function section(key, title, sumEl, body, open = false) {
   return h('div.card', fold(key, h('div.grow', h('h2', { style: { margin: 0 } }, title), sumEl),
     [h('div', { style: { marginTop: '12px' } }, ...[].concat(body))], { open }));
 }
+/** 說明收在一行「ⓘ 說明」裡，點了才展開（不記住開合） */
+export function tip(...kids) {
+  return h('details.tip', h('summary', 'ⓘ 說明'), h('div', ...kids));
+}
 export const sumLine = () => h('div.mu.small', { style: { marginTop: '2px', fontWeight: 400 } });
 
 /** 數值表：小數點對齊。rows: [label, number, decimals, unit, sub?] */

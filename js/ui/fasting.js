@@ -1,6 +1,6 @@
 /* 今日頁：斷食卡片（計時、階段進度條、每小時提示、三種模式）與長期指數提示 */
 import { S, L, commit, commitLocal, plan, uid } from '../state.js';
-import { h, fold, pills, toast } from './common.js';
+import { h, fold, pills, toast, tip } from './common.js';
 import { FASTING } from '../config.js';
 import { HOURLY_MESSAGES, OMAD_DONE } from '../messages.js';
 import { currentFast, fastEnd, lastMealGroup, mealShift, stageAt, stageStarts, hourlyMessage, hybridSuggestion, eatingWindow, hm, dur } from '../fasting.js';
@@ -131,7 +131,7 @@ export function fastingCard() {
   const f = currentFast(S.meals, S.fasts, now, P.fastOverride);
   const card = h('div.card');
   if (!f.start) {
-    card.append(h('h2', { style: { margin: 0 } }, '斷食'), h('div.mu.small', { style: { margin: '2px 0 4px' } }, '記餐之後會自動從上一餐開始計時；剛吃完也可以按下面的按鈕開始。'), startBtn());
+    card.append(h('h2', { style: { margin: 0 } }, '斷食'), h('div.mu.small.one', { style: { margin: '2px 0 4px' } }, '記餐後自動從上一餐開始計時'), startBtn());
     return card;
   }
   const shift = mealShift(f.lastMeal);
@@ -158,7 +158,8 @@ export function fastingCard() {
     dayLabel(f.start) + ' 開始 → ' + (over ? '預計時間是 ' : '預計 ') + dayLabel(e.end) + ((ov && (Number.isFinite(ov.start) || Number.isFinite(ov.end))) ? '（已手動修改）' : '')));
   // 3. 身體現在的狀態
   body.append(h('div', { style: { marginTop: '6px', fontWeight: 650 } }, '身體現在：' + st.text),
-    h('div.mu.tiny', (st.nextAt != null ? '下一階段還有 ' + dur(st.nextAt - f.hours) + '・' : '') + '階段時間因人而異，僅供參考' + (shift ? '（上一餐比較豐盛，階段往後挪約 ' + shift + ' 小時）' : '')));
+    h('div.mu.tiny.one', st.nextAt != null ? '下一階段還有 ' + dur(st.nextAt - f.hours) : '已是最後階段'),
+    tip('階段時間因人而異，僅供參考。' + (shift ? '上一餐比較豐盛，階段往後挪約 ' + shift + ' 小時。' : '')));
   // 4. 心靈雞湯
   body.append(h('div', { style: { margin: '14px 0 4px', color: 'var(--ac)', fontWeight: 650, fontSize: '17px', lineHeight: 1.6 } }, hourlyMessage(f.hours, f.start, HOURLY_MESSAGES)));
   if (mode === 'STRICT_MANUAL' && (P.strictPlan || '16:8') === '24H' && f.hours >= FASTING.plans['24H']) body.append(h('div.notice.ok', { style: { marginTop: '8px' } }, OMAD_DONE[0]));
@@ -184,7 +185,7 @@ export function fastingCard() {
   const timeBody = [h('div', { style: { marginTop: '8px' } },
     h('label', { style: { marginTop: 0 } }, '開始時間'), sIn,
     h('label', '預計結束時間'), eIn,
-    h('div.mu.tiny', { style: { marginTop: '4px' } }, '改過的時間最優先：經過時間、還剩多久、百分比、階段和提示文字都會照新的時間重新計算；記下一餐時自動回到從上一餐開始算。'),
+    tip('改過的時間最優先：經過時間、還剩多久、百分比、階段和提示文字都會照新的時間重新計算；記下一餐時自動回到從上一餐開始算。'),
     saveT,
     ov ? h('button.link.small', { type: 'button', onclick: () => { P.fastOverride = null; commit(); toast('已改回自動計算'); } }, '改回自動計算') : null)];
   sec.append(fold('fast-time', h('span.small', h('b', '時間'), h('span.mu', '・' + dayLabel(f.start) + ' → ' + dayLabel(e.end) + (ov ? '（已手動修改）' : ''))), timeBody));
@@ -201,11 +202,11 @@ export function fastingCard() {
 
   const pickMode = v => { P.fastMode = v; L.collapsed['fast-mode'] = 0; commit(); };
   const modeBody = [h('div', { style: { marginTop: '8px' } }, pills(MODES, mode, pickMode))];
-  if (mode === 'PURE_DYNAMIC') modeBody.push(h('div', { style: { marginTop: '8px' } }, h('div.mu.tiny', '目標時數'), pills(FASTING.freeTargets.map(t => [t, t + ' 小時']), +P.fastTarget || FASTING.freeTargetDefault, v => { P.fastTarget = v; L.collapsed['fast-mode'] = 0; commit(); })));
+  if (mode === 'PURE_DYNAMIC') modeBody.push(h('div', { style: { marginTop: '8px' } }, h('div.mu.tiny', '目標（小時）'), pills(FASTING.freeTargets.map(t => [t, String(t)]), +P.fastTarget || FASTING.freeTargetDefault, v => { P.fastTarget = v; L.collapsed['fast-mode'] = 0; commit(); })));
   if (mode === 'STRICT_MANUAL') {
     const timeIn = h('input', { type: 'time', value: P.windowStart || '12:00', style: { width: '150px' } });
     timeIn.onchange = () => { P.windowStart = timeIn.value || '12:00'; commit(); };
-    modeBody.push(h('div', { style: { marginTop: '8px' } }, pills(PLANS.map(p => [p, p === '24H' ? '24H（一天一餐）' : p]), P.strictPlan || '16:8', v => { P.strictPlan = v; L.collapsed['fast-mode'] = 0; commit(); })),
+    modeBody.push(h('div', { style: { marginTop: '8px' } }, pills(PLANS.map(p => [p, p === '24H' ? '一天一餐' : p]), P.strictPlan || '16:8', v => { P.strictPlan = v; L.collapsed['fast-mode'] = 0; commit(); })),
       h('div.row', { style: { marginTop: '8px' } }, h('span.small.mu', '進食窗口從'), timeIn, h('span.small.mu', '開始，' + win.eatHours + ' 小時')),
       h('div.small', { style: { marginTop: '6px' } }, win.inWindow ? '現在在進食窗口中，到 ' + hm(win.closesAt) + ' 結束' : '進食窗口 ' + dayLabel(win.opensAt) + ' 開始'));
     if ((P.strictPlan || '16:8') === '24H') {
@@ -266,7 +267,9 @@ export function longTermCard() {
     h('div', '長期攝取指數 ' + lt.index.toFixed(2) + '（1.0＝平均每天吃到基礎代謝的量）。這是把每天「吃進的熱量 ÷ 基礎代謝」慢慢平均起來的數字，只算有好好記錄的日子。'),
     wt.weeklyPct !== null ? h('div', '最近體重平均每週下降約 ' + wt.weeklyPct.toFixed(1) + '%。') : null,
     h('div', '這只是提醒，不是診斷。如果覺得疲倦、怕冷或掉髮，可以和醫師聊聊。'));
-  return h('div.card', { style: { borderColor: 'var(--warn)' } }, fold('lt-card', h('div.small', { style: { fontWeight: 600 } }, msg), [body]));
+  const short = (lt.level === 'veryLow' ? '熱量長期明顯偏低' : '熱量長期偏低') + (wt && wt.fast ? '・體重掉太快' : '');
+  body.prepend(h('div', { style: { color: 'var(--tx)' } }, msg + '。'));
+  return h('div.card', { style: { borderColor: 'var(--warn)' } }, fold('lt-card', h('div.small', { style: { fontWeight: 600 } }, short), [body]));
 }
 
 /** 圖表頁：長期攝取指數的狀態（資料累積中也顯示） */
@@ -317,12 +320,10 @@ export function leanCard() {
   return h('div.card', { style: t.alert ? { borderColor: 'var(--warn)' } : null },
     fold('lean-card', h('div.row', { style: { alignItems: 'center' } }, dot(TONE[m.tone]), h('span.small.num', { style: { fontWeight: 600 } }, m.line)), [h('div', { style: { marginTop: '4px' } }, leanBody(t))], { force }));
 }
-/** 圖表頁：淨體重趨勢的狀態（資料累積中也顯示） */
-export function leanStatusCard() {
+/** 圖表頁：淨體重卡的摘要一行與說明（和淨體重圖放在同一張卡） */
+export function leanParts() {
   const t = leanStatus();
-  if (!S.entries.some(e => e.wt > 0 && e.fat > 0)) return null;
   const m = leanSummary(t);
-  const sum = !m ? '資料累積中（最近 28 天 ' + t.curDays + ' 天、再前 28 天 ' + t.prevDays + ' 天有體脂，各需要 6 天）' : m.line.replace('淨體重 28 天：', '28 天平均 ' + f1(t.cur) + ' kg・');
-  return h('div.card', fold('lean-status', h('div.grow', h('h2', { style: { margin: 0 } }, '淨體重趨勢'), h('div.mu.small.row', { style: { marginTop: '2px', alignItems: 'center' } }, m ? dot(TONE[m.tone]) : null, sum)),
-    [h('div', { style: { marginTop: '6px' } }, leanBody(t))], { open: true }));
+  const sum = !m ? '累積中（兩段 28 天各需 6 天有體脂：' + t.curDays + '／' + t.prevDays + '）' : m.line.replace('淨體重 28 天：', '28 天 ');
+  return { sum: h('div.mu.small.row', { style: { marginTop: '2px', alignItems: 'center' } }, m ? dot(TONE[m.tone]) : null, h('span.one', sum)), body: leanBody(t) };
 }

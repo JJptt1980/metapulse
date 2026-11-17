@@ -2,7 +2,7 @@
  * - Google：Drive 自動備份（帳號、同步、切換、中斷）＋ 從 Drive 讀取同步版備份
  * - 其他：備份文字（產生、還原）與同步版的文字／檔案匯入共用一個輸入框，自動判斷格式 */
 import { S, L, commit, commitLocal, replaceState } from '../state.js';
-import { h, toast, section, sumLine, fold } from './common.js';
+import { h, toast, section, sumLine, fold, tip } from './common.js';
 import { connect, disconnect, syncNow, linked, ready, driveStatus, driveEmail, onDrive, readSyncBackup, readOwnRemote } from '../drive.js';
 import { latestText } from '../records.js';
 import { normalizeState } from '../storage.js';
@@ -48,13 +48,12 @@ function aiFold() {
     try { await navigator.clipboard.writeText(AI_PROMPT); } catch (e) { ta.select(); try { document.execCommand('copy'); } catch (e2) { /* 手動複製 */ } }
     cp.textContent = '已複製'; setTimeout(() => { cp.textContent = '複製提示詞'; }, 1500);
   };
-  return fold('ai-import', h('span.small', { style: { fontWeight: 650 } }, '從其他 App 或 Excel 匯入'), [h('div', { style: { marginTop: '8px' } },
-    h('ol.mu.small', { style: { paddingLeft: '20px', lineHeight: 1.7, margin: '0 0 8px' } },
+  return fold('ai-import', h('span.small', { style: { fontWeight: 650 } }, '從 Excel 或其他 App 匯入'), [h('div', { style: { marginTop: '8px' } },
+    cp, tip(h('ol', { style: { paddingLeft: '18px', margin: '0 0 6px' } },
       h('li', '按「複製提示詞」。'),
       h('li', '貼到你常用的 AI 對話（例如 ChatGPT、Gemini），再把你的記錄（Excel 複製的表格、CSV 內容都可以）貼在最後面。'),
       h('li', '把 AI 回覆的內容複製起來，貼到上面的框，按「匯入或還原」。')),
-    h('div.mu.tiny', { style: { lineHeight: 1.6, marginBottom: '6px' } }, '這樣匯入只會「加入」新的記錄，不會取代現有資料，已經有的也不會重複加入。只能匯入身體記錄（體重、血壓、體組成、注射），餐點不行。你的記錄會傳給你用的 AI 服務，請自己評估是否適合。'),
-    ta, cp)]);
+      '這樣匯入只會「加入」新的記錄，不會取代現有資料，已經有的也不會重複加入。只能匯入身體記錄（體重、血壓、體組成、注射），餐點不行。你的記錄會傳給你用的 AI 服務，請自己評估是否適合。', ta))]);
 }
 
 export function backupCard() {
@@ -103,7 +102,7 @@ export function backupCard() {
   const sw = h('button.ghost', { type: 'button', onclick: () => { disconnect(); connect(true, true); } }, '切換帳號');
   const off = h('button.ghost', { type: 'button', onclick: () => { disconnect(); draw(); } }, '中斷連線');
   const acctBtns = h('div.grid2', { style: { marginTop: '8px' } }, sw, off);
-  const fromDrive = h('button.ghost.full', { type: 'button', style: { marginTop: '8px' } }, '從 Google Drive 匯入同步版存檔');
+  const fromDrive = h('button.ghost.full', { type: 'button', style: { marginTop: '8px' } }, '匯入同步版（Drive）');
   fromDrive.onclick = async () => {
     if (!ready()) { say(outDrive, '請先按上面的「連線 Google Drive」，登入和同步版同一個 Google 帳號，再按一次。'); return; }
     const done = busy(fromDrive, '讀取中…'); outDrive.textContent = '';
@@ -177,9 +176,9 @@ export function backupCard() {
 
   function draw() {
     const em = driveEmail();
-    sumEl.textContent = (linked() ? 'Google Drive：' + (em || '已連線') + '・' + driveStatus().replace(/（點這裡.*?）/, '') + (L.lastBackup ? '（' + ago(L.lastBackup) + '）' : '') : 'Google Drive 尚未連線')
-      + (L.lastSyncImport ? '・同步版 ' + fmtAt(L.lastSyncImport.at) + ' 匯入' : '');
-    acct.textContent = linked() ? '帳號：' + (em || '（按「重新登入」後顯示）') + '・' + driveStatus().replace(/（點這裡.*?）/, '') : '連線後，每次修改記錄都會自動存一份到你自己的 Google Drive（雲端硬碟）。';
+    sumEl.textContent = linked() ? (em || 'Google Drive 已連線') + (L.lastBackup ? '・' + ago(L.lastBackup) + '存檔' : '') : 'Google Drive 尚未連線';
+    sumEl.style.color = linked() ? '' : 'var(--warn)';
+    acct.textContent = linked() ? (em || '已連線（按「重新登入」後顯示帳號）') + '・' + driveStatus().replace(/（點這裡.*?）/, '') : '連線後，每次修改都自動存到雲端';
     main.textContent = linked() ? (ready() ? '立即同步' : '重新登入 Google Drive') : '連線 Google Drive';
     acctBtns.style.display = linked() ? '' : 'none';
   }
@@ -188,15 +187,16 @@ export function backupCard() {
 
   const body = [
     sub('Google', true), acct, main, acctBtns, check, outCheck,
-    h('div.mu.tiny', { style: { marginTop: '8px', lineHeight: 1.6 } }, 'MetaPulse 的存檔會放在你 Google Drive 裡一個看不到的專用資料夾，只有這個 app 能讀寫，別人（包括作者）都看不到。手機和雲端的存檔會合併在一起，同一筆記錄以最後修改的為準，不會整份互相蓋掉。'),
     fromDrive, outDrive,
-    h('div.mu.tiny', { style: { marginTop: '8px', lineHeight: 1.6 } }, '「同步版」是你之前用的「注射與體重記錄 同步版」app。按上面的按鈕，可以把它存在 Google Drive 的記錄搬過來；只會讀取，不會改動同步版，可以重複按，不會重複加入。'),
-    sub('其他：用文字或檔案存檔、搬資料'),
+    tip('Google Drive（雲端硬碟）：MetaPulse 的存檔放在一個看不到的專用資料夾，只有這個 app 能讀寫，別人（包括作者）都看不到。手機和雲端的存檔會合併在一起，同一筆記錄以最後修改的為準，不會整份互相蓋掉。', h('br'),
+      '同步版：你之前用的「注射與體重記錄 同步版」app。「匯入同步版（Drive）」會把它存在 Google Drive 的記錄搬過來；只會讀取，不會改動同步版，可以重複按，不會重複加入。'),
+    sub('其他：文字或檔案'),
     ta, h('div.grid2', { style: { marginTop: '8px' } }, gen, use), outText,
-    h('label', '或選擇存檔檔案（.json 或 .txt）'), file,
-    h('div.mu.tiny', { style: { marginTop: '6px', lineHeight: 1.6 } }, '「產生存檔文字」會把全部記錄變成一段文字，可以複製貼到記事本或傳給自己保存。貼上或選擇檔案後，app 會自動判斷：MetaPulse 的存檔會「還原」（用它取代現在全部的資料，要再按一次確認）；同步版的存檔會「匯入」（只加入新的記錄，可以重複做）。'),
+    h('label', '或選擇存檔檔案'), file,
+    tip('「產生存檔文字」會把全部記錄變成一段文字，可以複製貼到記事本或傳給自己保存。貼上或選擇檔案（.json 或 .txt）後，app 會自動判斷：MetaPulse 的存檔會「還原」（用它取代現在全部的資料，要再按一次確認）；同步版的存檔會「匯入」（只加入新的記錄，可以重複做）。'),
     aiFold(),
+    h('a.small.one', { href: 'guide.html', style: { display: 'block', marginTop: '14px', color: 'var(--ac)', fontWeight: 600 } }, '搬家說明：把其他 app 的資料整合到 Maple ›'),
   ];
   if (lastResult && Date.now() - lastResult.at < 15000) { say(outText, lastResult.text, true); lastResult = null; }
-  return section('backup', '備份與匯入', sumEl, body, !linked() || !S.entries.length);
+  return section('backup', '備份與匯入', sumEl, body, false);
 }

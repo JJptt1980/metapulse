@@ -233,7 +233,7 @@ export function fastingCard() {
 /** 結束斷食：斷食停在這一刻（記成一次斷食），齒輪加速轉動的特效；要記餐請另外按「記一餐」 */
 function endFastBtn(f) {
   return h('button.pri.full', {
-    type: 'button',
+    type: 'button', style: { background: 'var(--warn)', color: 'var(--act)' },
     onclick: () => {
       const now = new Date().toISOString();
       const open = S.fasts.find(z => !z.end);
@@ -255,7 +255,7 @@ function startBtn() {
       S.prefs.fastOverride = null; commit();
       timeStop();
     },
-  }, '結束進餐');
+  }, '結束進餐，開始斷食');
 }
 
 /** 長期指數提示：沒觸發時不顯示；觸發時一行，點開看說明 */

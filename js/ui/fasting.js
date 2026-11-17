@@ -1,6 +1,6 @@
 /* 今日頁：斷食卡片（計時、階段進度條、每小時提示、三種模式）與長期指數提示 */
 import { S, L, commit, commitLocal, plan, uid } from '../state.js';
-import { h, fold, pills, toast, tip } from './common.js';
+import { h, fold, pills, toast, tip, info3 } from './common.js';
 import { FASTING } from '../config.js';
 import { HOURLY_MESSAGES, OMAD_DONE } from '../messages.js';
 import { currentFast, fastEnd, lastMealGroup, mealShift, stageAt, stageStarts, hourlyMessage, hybridSuggestion, eatingWindow, hm, dur } from '../fasting.js';
@@ -274,13 +274,23 @@ function startBtn() {
 export function longTermCard() {
   const { lt, wt, msg } = longTermStatus();
   if (!msg) return null;
-  const body = h('div.small.mu', { style: { marginTop: '8px', lineHeight: 1.7 } },
-    h('div', '長期攝取指數 ' + lt.index.toFixed(2) + '（1.0＝平均每天吃到基礎代謝的量）。這是把每天「吃進的熱量 ÷ 基礎代謝」慢慢平均起來的數字，只算有好好記錄的日子。'),
-    wt.weeklyPct !== null ? h('div', '最近體重平均每週下降約 ' + wt.weeklyPct.toFixed(1) + '%。') : null,
-    h('div', '這只是提醒，不是診斷。如果覺得疲倦、怕冷或掉髮，可以和醫師聊聊。'));
   const short = (lt.level === 'veryLow' ? '熱量長期明顯偏低' : '熱量長期偏低') + (wt && wt.fast ? '・體重掉太快' : '');
-  body.prepend(h('div', { style: { color: 'var(--tx)' } }, msg + '。'));
-  return h('div.card', { style: { borderColor: 'var(--warn)' } }, fold('lt-card', h('div.small', { style: { fontWeight: 600 } }, short), [body]));
+  return h('div.card', { style: { borderColor: 'var(--warn)' } }, fold('lt-card', h('div.small', { style: { fontWeight: 600 } }, short), [ltBody(lt, wt, msg)]));
+}
+
+/** 長期攝取指數的說明：現況／建議／說明 */
+function ltBody(lt, wt, msg) {
+  const ABOUT = ['每天算一次：當天吃進的熱量 ÷ 基礎代謝，再慢慢平均成長期指數（1.0＝平均每天剛好吃到基礎代謝）。', h('br'),
+    '沒有記錄的日子會跳過；當天記錄的熱量不到基礎代謝的 30%，視為「沒記完整」也跳過。今天還沒過完，不列入。', h('br'),
+    '至少要 21 個有效記錄日，而且最近 28 天有 70% 以上的日子有記錄，才會開始提醒。低於 1.0：最近熱量偏低；低於 0.8：熱量持續明顯偏低。這只是提醒，不是診斷。'];
+  const wtLine = wt.weeklyPct !== null ? '體重（14 天平均）最近每週變化約 ' + (-wt.weeklyPct).toFixed(1) + '%' : null;
+  if (!lt.ready) return info3({ now: ['資料累積中：有效記錄 ' + lt.validDays + '／21 天，最近 28 天有 ' + lt.recentValid + ' 天', ...(wtLine ? [wtLine] : [])], tone: 'var(--mu)', about: ABOUT });
+  return info3({
+    now: ['指數 ' + lt.index.toFixed(2) + '：' + (msg || '正常範圍'), ...(wtLine ? [wtLine] : [])],
+    tone: msg ? 'var(--warn)' : 'var(--ac)',
+    advice: msg ? '每天至少吃到基本需要的點數，蛋白質吃夠；如果覺得疲倦、怕冷或掉髮，可以和醫師聊聊。' : '照現在的節奏就好。',
+    about: ABOUT,
+  });
 }
 
 /** 圖表頁：長期攝取指數的狀態（資料累積中也顯示） */
@@ -289,14 +299,7 @@ export function longTermStatusCard() {
   const sum = !lt.ready
     ? '資料累積中（有效記錄 ' + lt.validDays + '／21 天，最近 28 天 ' + lt.recentValid + ' 天）'
     : '指數 ' + lt.index.toFixed(2) + '・' + (msg ? '有提醒' : '正常範圍');
-  const body = h('div.small.mu', { style: { lineHeight: 1.7 } },
-    h('div', '每天算一次：當天吃進的熱量 ÷ 基礎代謝，再慢慢平均成長期指數（1.0＝平均每天剛好吃到基礎代謝）。'),
-    h('div', '沒有記錄的日子會跳過；當天記錄的熱量不到基礎代謝的 30%，視為「沒記完整」也跳過。今天還沒過完，不列入。'),
-    h('div', '至少要 21 個有效記錄日，而且最近 28 天有 70% 以上的日子有記錄，才會開始提醒。'),
-    h('div', '低於 1.0：最近熱量偏低；低於 0.8：熱量持續明顯偏低。'),
-    wt.weeklyPct !== null ? h('div', '體重（14 天平均）最近每週變化約 ' + (-wt.weeklyPct).toFixed(1) + '%。') : null,
-    msg ? h('div', { style: { color: 'var(--warn)', fontWeight: 600 } }, msg) : null);
-  return h('div.card', fold('lt-status', h('div.grow', h('h2', { style: { margin: 0 } }, '長期攝取指數'), h('div.mu.small', { style: { marginTop: '2px' } }, sum)), [h('div', { style: { marginTop: '10px' } }, body)]));
+  return h('div.card', fold('lt-status', h('div.grow', h('h2', { style: { margin: 0 } }, '長期攝取指數'), h('div.mu.small.one', { style: { marginTop: '2px' } }, sum)), [ltBody(lt, wt, msg)]));
 }
 
 /* ---------- 淨體重趨勢 ---------- */
@@ -313,13 +316,18 @@ const dot = c => h('span', { style: { display: 'inline-block', width: '10px', he
 function leanBody(t) {
   const m = leanSummary(t);
   const box = (c, ...k) => h('div', { style: { borderLeft: '4px solid ' + c, background: 'var(--soft)', borderRadius: '10px', padding: '8px 10px', marginTop: '8px', color: 'var(--tx)' } }, ...k);
-  return h('div.small', { style: { lineHeight: 1.7 } },
-    m ? box(TONE[m.tone], h('b', '這代表什麼？'), h('div', m.levelText), t.alert ? h('div', { style: { color: 'var(--warn)', fontWeight: 600 } }, '而且最近 28 天蛋白質平均沒達到目標：' + LEAN_MSG + '。') : null) : null,
-    m && m.lost ? box(TONE[t.share === 'good' ? 'good' : t.share === 'ok' ? 'mid' : 'warn'], h('b', '減掉的重量裡，脂肪佔多少？'), h('div', m.lost)) : null,
-    t.ready ? h('div.mu.num', { style: { marginTop: '8px' } }, '最近 28 天平均 ' + f1(t.cur) + ' kg（' + t.curDays + ' 天有量），再前 28 天 ' + f1(t.prev) + ' kg（' + t.prevDays + ' 天），變化 ' + sg1(t.change) + ' kg（' + sg1(t.pct) + '%）。') : null,
-    t.protein !== null ? h('div.mu.num', '最近 28 天平均每天蛋白質 ' + Math.round(t.protein) + ' g（目標 ' + plan().proteinTarget + ' g，' + t.mealDays + ' 天有記錄）。') : h('div.mu', '最近 28 天的餐點記錄少於 10 天，暫時不判斷蛋白質。'),
-    h('div.mu', { style: { marginTop: '6px' } }, '淨體重＝體重 ×（1 − 體脂率），也就是扣掉脂肪後剩下的重量（肌肉、骨頭、水分等）。體脂機每天的數字會跳動，所以只比較兩段 28 天的平均：±0.5% 以內算持平，下降 0.5～1.5% 算小幅，超過 1.5% 算明顯。'),
-    h('div.mu', '這只是提醒，不會自動改點數。減重時吃夠蛋白質、做一點肌力運動，有助於保住肌肉。'));
+  void box;
+  const ABOUT = ['淨體重＝體重 ×（1 − 體脂率），也就是扣掉脂肪後剩下的重量（肌肉、骨頭、水分等）。體脂機每天的數字會跳動，所以只比較兩段 28 天的平均：±0.5% 以內算持平，下降 0.5～1.5% 算小幅，超過 1.5% 算明顯。', h('br'),
+    t.ready ? '最近 28 天平均 ' + f1(t.cur) + ' kg（' + t.curDays + ' 天有量），再前 28 天 ' + f1(t.prev) + ' kg（' + t.prevDays + ' 天）。' : '',
+    t.protein !== null ? '最近 28 天平均每天蛋白質 ' + Math.round(t.protein) + ' g（目標 ' + plan().proteinTarget + ' g，' + t.mealDays + ' 天有記錄）。' : '最近 28 天的餐點記錄少於 10 天，暫時不判斷蛋白質。',
+    h('br'), '這只是提醒，不會自動改點數。'];
+  if (!m) return info3({ now: '資料累積中' + (t.readyIn ? '，約 ' + t.readyIn + ' 天後有判讀' : ''), tone: 'var(--mu)', about: ABOUT });
+  const now = [sg1(t.change) + ' kg（' + sg1(t.pct) + '%）：' + m.levelText];
+  if (m.lost) now.push(h('div.small', { style: { marginTop: '4px' } }, m.lost));
+  const advice = t.alert ? '最近 28 天蛋白質平均沒達到目標：' + LEAN_MSG + '，也可以加一點肌力運動。'
+    : t.level === 'drop' || t.level === 'down' ? '吃夠蛋白質、做一點肌力運動，有助於保住肌肉。'
+    : '維持現在的蛋白質和活動量。';
+  return info3({ now, advice, about: ABOUT, tone: TONE[m.tone] });
 }
 /** 今日頁：資料夠了就固定顯示一行（顏色表示結果），有提醒時自動展開一次 */
 export function leanCard() {

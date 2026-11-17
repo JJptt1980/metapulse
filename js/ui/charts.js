@@ -35,6 +35,23 @@ const crosshair = color => ({
   },
 });
 
+/* 參考區間：BMI 台灣成人標準；血壓用台灣高血壓指引的居家血壓目標 130/80 */
+const BMI_BANDS = [{ from: 18.5, to: 24, color: 'rgba(34,160,90,.10)' }, { from: 24, to: 27, color: 'rgba(224,168,0,.13)' }, { from: 27, to: 99, color: 'rgba(210,70,50,.08)' }];
+const BP_REFS = [{ y: 130, label: '130' }, { y: 80, label: '80' }];
+const BP_NOTE = '虛線是 130／80：台灣高血壓治療指引建議的居家血壓目標（收縮壓／舒張壓）。只是參考，請和醫師討論自己的目標。';
+/** 在圖表底層畫背景區間（bands）與水平參考虛線（refs） */
+function refPlugin(sp) {
+  return {
+    id: 'refs', beforeDatasetsDraw(c) {
+      const y = c.scales.y, ar = c.chartArea, g = c.ctx; if (!y) return;
+      g.save(); g.beginPath(); g.rect(ar.left, ar.top, ar.right - ar.left, ar.bottom - ar.top); g.clip();
+      for (const b of sp.bands || []) { const y1 = y.getPixelForValue(b.to), y2 = y.getPixelForValue(b.from); g.fillStyle = b.color; g.fillRect(ar.left, Math.min(y1, y2), ar.right - ar.left, Math.abs(y2 - y1)); }
+      for (const r of sp.refs || []) { const py = y.getPixelForValue(r.y); if (py < ar.top || py > ar.bottom) continue; g.strokeStyle = 'rgba(120,120,120,.8)'; g.setLineDash([6, 4]); g.lineWidth = 1.2; g.beginPath(); g.moveTo(ar.left, py); g.lineTo(ar.right, py); g.stroke(); g.setLineDash([]); g.fillStyle = 'rgba(110,110,110,.9)'; g.font = '11px system-ui'; g.fillText(r.label, ar.right - 24, py - 3); }
+      g.restore();
+    },
+  };
+}
+
 /**
  * 產生各圖表設定；畫面與（之後的）截圖共用
  * @param range 'all' | '30' | '90'；bpv 'all' | 'day' | 'ampm'
@@ -56,6 +73,12 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
   const dayAvg = (list, f) => { const m = {}; list.forEach(e => { const v = f(e); if (v > 0) (m[e.date] = m[e.date] || []).push(v); }); const o = {}; for (const k in m) o[k] = m[k].reduce((a, b) => a + b, 0) / m[k].length; return o; };
   const on = (map, axis, d = 1) => axis.map(x => (map[x] != null ? +map[x].toFixed(d) : null));
   const NONE = ['這天沒有量'];
+  // 醫學上常見的畫法：每天的數值用淡色小點（每天會跳動），趨勢看 7 天平均的粗線
+  const fade = (c, a) => { const m = /^#([0-9a-f]{6})$/i.exec(String(c).trim()); if (!m) return c; const n = parseInt(m[1], 16); return 'rgba(' + (n >> 16) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'; };
+  const dots = (label, data, color, extra) => Object.assign({ label, data, borderColor: fade(color, 0.5), backgroundColor: fade(color, 0.5), showLine: false, pointRadius: data.length > 120 ? 1.5 : 2.5, pointHoverRadius: 5 }, extra || {});
+  const trend = (label, data, color, extra) => Object.assign({ label, data, borderColor: color, backgroundColor: color, borderWidth: 3, pointRadius: 0, pointHoverRadius: 4, tension: 0.35, spanGaps: true }, extra || {});
+  const ma7 = (mapAll, axis, d = 1) => { const ks = Object.keys(mapAll).sort(); return axis.map(x => { const from = fromDn(dn(x) - 6); const v = ks.filter(k => k >= from && k <= x).map(k => mapAll[k]); return v.length >= 3 ? +(v.reduce((a, b) => a + b, 0) / v.length).toFixed(d) : null; }); };
+  const allAvg = f => dayAvg(all, f);
   const sp = [];
   const wd = dayAvg(ws, e => e.wt), wAxis = span(Object.keys(wd).sort()), m2 = H ? (H / 100) ** 2 : 0;
   const wv = Object.values(wd), wMin = wv.length ? Math.min(...wv) : 0, wMax = wv.length ? Math.max(...wv) : 0;
@@ -64,11 +87,11 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
   if (wAxis.length) {
     sp.push({
       id: 'w', title: '體重', dates: wAxis,
-      sub: TW > 0 && lastW ? (lastW > TW ? '目標 ' + TW + ' kg・還差 ' + (lastW - TW).toFixed(1) : '已達目標 ' + TW + ' kg') : '',
+      sub: (() => { const mxW = Math.max(...Object.values(allAvg(e => e.wt))); const lost = mxW - lastW; return [lost >= 0.5 ? '最高 ' + mxW.toFixed(1) + ' → ' + lastW.toFixed(1) + '・已瘦 ' + lost.toFixed(1) + ' kg' : '', TW > 0 && lastW ? (lastW > TW ? '還差 ' + (lastW - TW).toFixed(1) : '已達目標') : ''].filter(Boolean).join('・'); })(),
       extra: i => { const d = wAxis[i]; if (wd[d] == null) return NONE; const x = []; if (H) x.push('BMI ' + (wd[d] / m2).toFixed(1)); const ts = ws.filter(e => e.date === d && e.time).map(e => e.time); if (ts.length) x.push('時間 ' + ts.join('、')); return x; },
       cfg: {
-        type: 'line', data: { labels: wAxis.map(md), datasets: [ln3('體重 (kg)', on(wd, wAxis), wc)].concat(showTW ? [{ label: '目標 ' + TW + ' kg', data: wAxis.map(() => TW), borderColor: mu, backgroundColor: mu, borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0 }] : []) },
-        options: { maintainAspectRatio: false, plugins: { legend: { display: showTW, labels: leg().labels } }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid() } } },
+        type: 'line', data: { labels: wAxis.map(md), datasets: [dots('每天', on(wd, wAxis), wc), trend('7 天平均', ma7(allAvg(e => e.wt), wAxis), wc)].concat(showTW ? [{ label: '目標 ' + TW + ' kg', data: wAxis.map(() => TW), borderColor: mu, backgroundColor: mu, borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0 }] : []) },
+        options: { maintainAspectRatio: false, plugins: { legend: leg() }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid() } } },
       },
     });
   }
@@ -83,8 +106,8 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
       id: 'lean', title: '淨體重', dates: lAxis, note: '淨體重＝體重 ×（1 − 體脂率）。點是每天的數值（會跳動），實線是 28 天平均，看趨勢請看實線。',
       cfg: {
         type: 'line', data: { labels: lAxis.map(md), datasets: [
-          ln3('每天 (kg)', lAxis.map(d => (lday[d] ? +lv(d).toFixed(1) : null)), c4, { showLine: false, pointRadius: lAxis.length > 80 ? 1.5 : 2.5 }),
-          ln3('28 天平均', ma, wc, { pointRadius: 0, borderWidth: 2.5 })] },
+          dots('每天 (kg)', lAxis.map(d => (lday[d] ? +lv(d).toFixed(1) : null)), c4),
+          trend('28 天平均', ma, wc)] },
         options: { maintainAspectRatio: false, plugins: { legend: { labels: leg().labels } }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid() } } },
       },
     });
@@ -147,13 +170,15 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
     const rg = (a, f) => { const v = a.map(f).filter(x => x > 0); return v.length ? Math.min(...v) + '–' + Math.max(...v) : ''; };
     const timed = bs.filter(e => e.time).length;
     const mode = bpv === 'ampm' && timed === 0 ? 'day' : bpv;
-    const opt = { maintainAspectRatio: false, plugins: { legend: leg() }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid() } } };
+    const opt = { maintainAspectRatio: false, plugins: { legend: leg() }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid(), suggestedMin: 60, suggestedMax: 140 } } };
     if (mode === 'day') {
-      const d3 = [ln3('收縮壓（日均）', dl.map(d => av(days[d], e => e.sys)), c3), ln3('舒張壓（日均）', dl.map(d => av(days[d], e => e.dia)), c4)];
-      if (bs.some(e => e.pul > 0)) d3.push(ln3('脈搏（日均）', dl.map(d => av(days[d], e => e.pul)), mu, { borderDash: [4, 3], pointRadius: 2 }));
+      const sysAll = dayAvg(all.filter(e => e.sys > 0 && e.dia > 0), e => e.sys), diaAll = dayAvg(all.filter(e => e.sys > 0 && e.dia > 0), e => e.dia);
+      const d3 = [dots('收縮壓', dl.map(d => av(days[d], e => e.sys)), c3), trend('收縮壓 7 天平均', ma7(sysAll, dl, 0), c3),
+        dots('舒張壓', dl.map(d => av(days[d], e => e.dia)), c4), trend('舒張壓 7 天平均', ma7(diaAll, dl, 0), c4)];
       sp.push({
         id: 'bp', title: '血壓與脈搏', dates: dl,
-        note: bpv === 'ampm' ? '這段範圍內的血壓記錄都沒有量測時間，無法分早晚，已改為每日平均。' : '同一天量好幾次會取平均；手指按在圖上可以看當天量了幾次、最高最低。',
+        note: (bpv === 'ampm' ? '這段範圍內的血壓記錄都沒有量測時間，無法分早晚，已改為每日平均。' : '淡色點是每天的平均，粗線是 7 天平均（看趨勢看粗線）。同一天量好幾次會取平均；手指按在圖上可以看當天量了幾次、最高最低。') + BP_NOTE,
+        refs: BP_REFS,
         extra: i => { const a = days[dl[i]]; if (!a) return NONE; const x = [a.length + ' 次量測']; if (a.length > 1) x.push('收縮壓 ' + rg(a, e => e.sys) + '，舒張壓 ' + rg(a, e => e.dia)); return x; },
         cfg: { type: 'line', data: { labels: dl.map(md), datasets: d3 }, options: opt },
       });
@@ -164,65 +189,56 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
       const nt = bs.length - timed;
       sp.push({
         id: 'bp', title: '血壓與脈搏', dates: dl,
-        note: '早上＝12:00 前量測，晚上＝12:00 後；實線為早上、虛線為晚上，同時段多次量測取平均。' + (nt ? '有 ' + nt + ' 筆沒有量測時間，未納入此圖。' : ''),
+        note: '早上＝12:00 前量測，晚上＝12:00 後；實線為早上、虛線為晚上，同時段多次量測取平均。' + (nt ? '有 ' + nt + ' 筆沒有量測時間，未納入此圖。' : '') + BP_NOTE, refs: BP_REFS,
         extra: i => { if (!days[dl[i]]) return NONE; const x = []; [['早上', true], ['晚上', false]].forEach(([n, am]) => { const a = part(dl[i], am); if (a.length) x.push(n + ' ' + a.length + ' 次'); }); return x; },
         cfg: { type: 'line', data: { labels: dl.map(md), datasets: d3 }, options: opt },
       });
     } else {
-      const ds3 = [ln3('收縮壓', bs.map(e => e.sys), c3), ln3('舒張壓', bs.map(e => e.dia), c4)];
-      if (bs.some(e => e.pul > 0)) ds3.push(ln3('脈搏', bs.map(e => e.pul > 0 ? e.pul : null), mu, { borderDash: [4, 3], pointRadius: 2 }));
+      // 每次量測：淡點；趨勢＝最近 14 次量測的平均
+      const roll = f => bs.map((e, i) => { const w = bs.slice(Math.max(0, i - 13), i + 1).map(f); return Math.round(w.reduce((a, b) => a + b, 0) / w.length); });
+      const ds3 = [dots('收縮壓', bs.map(e => e.sys), c3), trend('收縮壓趨勢', roll(e => e.sys), c3), dots('舒張壓', bs.map(e => e.dia), c4), trend('舒張壓趨勢', roll(e => e.dia), c4)];
+      if (bs.some(e => e.pul > 0)) ds3.push(dots('脈搏', bs.map(e => e.pul > 0 ? e.pul : null), mu));
       sp.push({
-        id: 'bp', title: '血壓與脈搏', dates: bs.map(e => e.date), note: '',
+        id: 'bp', title: '血壓與脈搏', dates: bs.map(e => e.date), note: '淡色點是每次量測，粗線是最近 14 次的平均（看趨勢看粗線）。' + BP_NOTE, refs: BP_REFS,
         extra: i => [bs[i].time ? '時間 ' + bs[i].time : '', (bs[i].note || '').replace(/^\d{1,2}:\d{2}[，,]?/, '')].filter(Boolean),
         cfg: { type: 'line', data: { labels: bs.map(e => md(e.date)), datasets: ds3 }, options: opt },
       });
     }
   }
   if (H && wAxis.length) {
-    const bMin = wMin / m2, bMax = wMax / m2, near = v => v >= bMin - 1.5 && v <= bMax + 1.5;
-    const lines = [];
-    if (near(24)) lines.push({ label: '過重 24', data: wAxis.map(() => 24), borderColor: mu, backgroundColor: mu, borderDash: [6, 4], borderWidth: 1, pointRadius: 0 });
-    if (near(27)) lines.push({ label: '肥胖 27', data: wAxis.map(() => 27), borderColor: mu, backgroundColor: mu, borderDash: [2, 3], borderWidth: 1, pointRadius: 0 });
     const bNow = lastW / m2;
     sp.push({
-      id: 'bmi', title: 'BMI', dates: wAxis,
-      sub: lastW ? '目前 ' + bNow.toFixed(1) + '（' + (bNow < 18.5 ? '過輕' : bNow < 24 ? '正常' : bNow < 27 ? '過重' : '肥胖') + '）' : '', note: '依身高 ' + H + ' cm 計算。BMI＝體重 ÷ 身高²（公尺）。台灣成人標準：24 以上過重、27 以上肥胖；界線在目前數值附近時才畫虛線。',
+      id: 'bmi', title: 'BMI', dates: wAxis, bands: BMI_BANDS,
+      sub: lastW ? '目前 ' + bNow.toFixed(1) + '（' + (bNow < 18.5 ? '過輕' : bNow < 24 ? '正常' : bNow < 27 ? '過重' : '肥胖') + '）' : '', note: '依身高 ' + H + ' cm 計算。BMI＝體重 ÷ 身高²（公尺）。背景顏色是台灣成人標準：綠色 18.5～24 正常、黃色 24～27 過重、紅色 27 以上肥胖。',
       extra: i => (wd[wAxis[i]] != null ? ['體重 ' + wd[wAxis[i]].toFixed(1) + ' kg'] : NONE),
       cfg: {
         type: 'line', data: { labels: wAxis.map(md), datasets: [
-          ln3('BMI', wAxis.map(d => (wd[d] != null ? +(wd[d] / m2).toFixed(1) : null)), wc), ...lines] },
+          dots('BMI', wAxis.map(d => (wd[d] != null ? +(wd[d] / m2).toFixed(1) : null)), wc), trend('7 天平均', ma7(allAvg(e => e.wt), wAxis).map(v => (v == null ? null : +(v / m2).toFixed(1))), wc)] },
         options: { maintainAspectRatio: false, plugins: { legend: leg() }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid() } } },
       },
     });
   }
+  const mini = (title, list, f, color, d, extra) => {
+    const m = dayAvg(list, f), ax = span(Object.keys(m).sort());
+    if (!ax.length) return null;
+    return { title, dates: ax, cfg: { type: 'line', data: { labels: ax.map(md), datasets: [dots(title, on(m, ax, d), color), trend('7 天平均', ma7(allAvg(f), ax, d), color, extra || {})] },
+      options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: grid(), ticks: { maxTicksLimit: 5 } }, y: { grid: grid(), ticks: { maxTicksLimit: 4, precision: d ? undefined : 0 } } } } } };
+  };
   if (bc.length) {
-    const hf = bc.some(e => e.fat > 0), hm = bc.some(e => e.mus > 0), hv = bc.some(e => e.vis > 0);
-    const F = dayAvg(bc, e => e.fat), M = dayAvg(bc, e => e.mus), V = dayAvg(bc, e => e.vis), ax = span([...new Set(bc.map(e => e.date))].sort());
-    const dsb = [];
-    if (hf) dsb.push(ln3('體脂率 (%)', on(F, ax), c3, { yAxisID: 'y' }));
-    if (hm) dsb.push(ln3('骨骼肌率 (%)', on(M, ax), c4, { yAxisID: 'y' }));
-    if (hv) dsb.push(ln3('內臟脂肪等級', on(V, ax), rc, { yAxisID: 'y1' }));
-    sp.push({
-      id: 'bc', title: '體脂、骨骼肌與內臟脂肪', dates: ax,
-      cfg: { type: 'line', data: { labels: ax.map(md), datasets: dsb }, options: { maintainAspectRatio: false, plugins: { legend: leg() }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid(), display: hf || hm, position: 'left' }, y1: { display: hv, position: 'right', grid: { drawOnChartArea: false }, ticks: { precision: 0, stepSize: 1 } } } } },
-    });
+    const parts = [mini('體脂率 (%)', bc, e => e.fat, c3, 1), mini('骨骼肌率 (%)', bc, e => e.mus, c4, 1), mini('內臟脂肪等級', bc, e => e.vis, rc, 0, { stepped: true, tension: 0 })].filter(Boolean);
+    if (parts.length) sp.push({ id: 'bc', title: '體脂、骨骼肌與內臟脂肪', dates: parts[0].dates, parts, cfg: parts[0].cfg, note: '每張小圖：淡色點是每天的數值，粗線是 7 天平均。體脂機的數字每天會跳動，看粗線的方向就好。' });
   }
   if (bm.length) {
-    const hg = bm.some(e => e.bage > 0), hr = bm.some(e => e.bmr > 0);
-    const G = dayAvg(bm, e => e.bage), R = dayAvg(bm, e => e.bmr), ax = span([...new Set(bm.map(e => e.date))].sort());
-    const d2 = [];
-    if (hg) d2.push(ln3('身體年齡（歲）', on(G, ax, 0), c3, { yAxisID: 'y' }));
-    if (hr) d2.push(ln3('基礎代謝 (大卡)', on(R, ax, 0), c4, { yAxisID: 'y1' }));
-    sp.push({
-      id: 'bm', title: '身體年齡與基礎代謝', dates: ax,
-      cfg: { type: 'line', data: { labels: ax.map(md), datasets: d2 }, options: { maintainAspectRatio: false, plugins: { legend: leg() }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid(), display: hg, position: 'left' }, y1: { display: hr, position: 'right', grid: { drawOnChartArea: false } } } } },
-    });
+    const parts = [mini('身體年齡（歲）', bm, e => e.bage, c3, 0), mini('基礎代謝（大卡）', bm, e => e.bmr, c4, 0)].filter(Boolean);
+    if (parts.length) sp.push({ id: 'bm', title: '身體年齡與基礎代謝', dates: parts[0].dates, parts, cfg: parts[0].cfg });
   }
+  for (const x of sp) { x.cfg.plugins = [refPlugin(x)]; for (const pt of x.parts || []) pt.cfg.plugins = []; }
   return sp;
 }
 
 /** 觸控提示框與垂直參考線 */
 export function addHover(sp, pal) {
+  if (sp.parts) { for (const pt of sp.parts) addHover(pt, pal); return; }
   const o = sp.cfg.options;
   o.interaction = { mode: 'index', intersect: false, axis: 'x' };
   o.plugins = o.plugins || {};
@@ -231,7 +247,7 @@ export function addHover(sp, pal) {
     filter: it => !/^(過重|肥胖) /.test(it.dataset.label || ''),
     callbacks: { title: it => (it.length && sp.dates ? fullDate(sp.dates[it[0].dataIndex]) : ''), footer: it => (it.length && sp.extra ? sp.extra(it[0].dataIndex) : []) },
   };
-  sp.cfg.plugins = [crosshair(pal.mu)];
+  sp.cfg.plugins = (sp.cfg.plugins || []).concat(crosshair(pal.mu));
 }
 
 /* ---------- 給 AI 分析：圖表截圖、數據摘要 ---------- */
@@ -278,10 +294,14 @@ async function exportCharts(range, bpv) {
       g.fillStyle = LIGHT.tx; g.font = 'bold 32px ' + font; g.fillText(sp.title, x, y + 36);
       if (sp.sub) { const tw = g.measureText(sp.title).width; g.fillStyle = LIGHT.mu; g.font = '26px ' + font; g.fillText('　' + sp.sub, x + tw, y + 36); }
       try {
-        const oc = document.createElement('canvas'); oc.width = CW; oc.height = CH;
-        Object.assign(sp.cfg.options, { responsive: false, animation: false, devicePixelRatio: 1, maintainAspectRatio: false });
-        const c = new Chart(oc, sp.cfg);
-        g.drawImage(oc, x, y + TIT); c.destroy();
+        const parts = sp.parts || [{ cfg: sp.cfg }], ph = Math.floor(CH / parts.length);
+        parts.forEach((pt, k) => {
+          const oc = document.createElement('canvas'); oc.width = CW; oc.height = ph - (sp.parts ? 30 : 0);
+          Object.assign(pt.cfg.options, { responsive: false, animation: false, devicePixelRatio: 1, maintainAspectRatio: false });
+          const c = new Chart(oc, pt.cfg);
+          if (sp.parts) { g.fillStyle = LIGHT.mu; g.font = 'bold 22px ' + font; g.fillText(pt.title, x, y + TIT + k * ph + 22); }
+          g.drawImage(oc, x, y + TIT + k * ph + (sp.parts ? 30 : 0)); c.destroy();
+        });
       } catch (e) { g.fillStyle = '#b91c1c'; g.font = '28px ' + font; g.fillText('這張圖產生失敗', x, y + TIT + 44); }
     });
   } finally { Chart.defaults.color = prev.color; Chart.defaults.font.size = prev.size; }
@@ -405,7 +425,12 @@ export async function renderCharts(root) {
     const cv = h('canvas', { style: { touchAction: 'pan-y' } });
     const body = [];
     if (sp.id === 'bp') body.push(h('div', { style: { margin: '10px 0 4px' } }, pills([['all', '全部量測'], ['day', '每日平均'], ['ampm', '早／晚分開']], bpv, v => { L.chartBp = v; commitLocal(); renderCharts(root); })));
-    body.push(h('div', { style: { position: 'relative', height: '250px', marginTop: '10px' } }, cv));
+    const cvs = (sp.parts || [{ cfg: sp.cfg }]).map((pt, i) => {
+      const c0 = i === 0 && !sp.parts ? cv : h('canvas', { style: { touchAction: 'pan-y' } });
+      if (sp.parts) body.push(h('div.small', { style: { marginTop: '10px', fontWeight: 650 } }, pt.title));
+      body.push(h('div', { style: { position: 'relative', height: sp.parts ? '130px' : '250px', marginTop: sp.parts ? '2px' : '10px' } }, c0));
+      return [c0, pt.cfg];
+    });
     if (sp.note) body.push(tip(sp.note));
     let head = h('h2', { style: { margin: 0 } }, sp.title);
     if (sp.id === 'lean') { const lp = leanParts(); head = h('div.grow', head, lp.sum); body.push(h('div', { style: { marginTop: '10px' } }, lp.body)); }
@@ -414,7 +439,7 @@ export async function renderCharts(root) {
     let chart = null;
     const draw = () => {
       if (chart || !d.open) return;
-      try { chart = new Chart(cv, sp.cfg); live.push(chart); }
+      try { for (const [c0, cfg] of cvs) { chart = new Chart(c0, cfg); live.push(chart); } }
       catch (e) { body[body.length - 1].after?.(h('div.notice', '圖表產生失敗：' + (e.message || e))); }
     };
     d.addEventListener('toggle', draw);

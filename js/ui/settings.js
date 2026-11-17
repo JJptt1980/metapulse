@@ -214,7 +214,7 @@ function prefsCard() {
   const fxBox = h('div', { style: { marginTop: '6px' } },
     tog('fxVisual', '結束進餐／斷食的特效'),
     tog('fxSound', '音效'),
-    tog('fxVoice', '語音念「砸瓦魯多」', '用手機內建的語音念出。手機靜音時可能聽不到；部分手機的 app 版不支援語音。'));
+    tog('fxVoice', '語音念「砸瓦魯多」', '播放錄好的語音（Mac 內建語音錄的）。手機靜音時聽不到。'));
   const wk = h('select', ...WEEK_MODES.map(([v, t]) => h('option', { value: v }, t)));
   wk.value = S.prefs.weekStart || 'roll';
   wk.onchange = () => { S.prefs.weekStart = wk.value; commit(); };

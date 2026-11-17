@@ -90,6 +90,16 @@ export function section(key, title, sumEl, body, open = false) {
   return h('div.card', fold(key, h('div.grow', h('h2', { style: { margin: 0 } }, title), sumEl),
     [h('div', { style: { marginTop: '12px' } }, ...[].concat(body))], { open }));
 }
+/**
+ * 資訊卡三段：現況（粗體、最重要）→ 建議（一句話、強調色）→ 說明（收在 ⓘ）
+ * now / advice 可以是字串或元素陣列；tone 是現況左邊色條的顏色
+ */
+export function info3({ now, advice, about, tone = 'var(--ac)' }) {
+  const blk = (label, color, kids, bold) => h('div', { style: { borderLeft: '4px solid ' + color, background: 'var(--soft)', borderRadius: '10px', padding: '8px 10px', marginTop: '8px', lineHeight: 1.7 } },
+    h('div.tiny', { style: { color, fontWeight: 700, letterSpacing: '1px' } }, label), ...[].concat(kids).map(k => (typeof k === 'string' ? h('div.small', { style: { fontWeight: bold ? 650 : 400 } }, k) : k)));
+  return h('div', blk('現況', tone, now, true), advice ? blk('建議', 'var(--c1)', advice, false) : null, about ? tip(...[].concat(about)) : null);
+}
+
 /** 說明收在一行「ⓘ 說明」裡，點了才展開（不記住開合） */
 export function tip(...kids) {
   return h('details.tip', h('summary', 'ⓘ 說明'), h('div', ...kids));

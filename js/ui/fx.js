@@ -1,5 +1,5 @@
 /* 按鈕特效與音效（全部原創：CSS 動畫、SVG 齒輪、Web Audio 合成音、手機內建語音）
- * - timeStop()：結束進餐 → 擬聲字「ゴゴゴゴ」、畫面反色、合成「時間凍結」音，接著語音念「砸瓦魯多」
+ * - timeStop()：結束進餐 → 擬聲字「ドドドド」、畫面反色、合成「時間凍結」音，接著播放「砸瓦魯多」（Mac 內建語音錄成的音檔）
  * - gears(after)：結束斷食 → 齒輪由靜止加速轉動、合成喀啦聲，結束後執行 after
  * 設定：L.fxVisual（特效）、L.fxSound（音效）、L.fxVoice（語音），預設都開 */
 import { L } from '../state.js';
@@ -11,15 +11,18 @@ function style() {
   const s = document.createElement('style');
   s.textContent = `
 .fx-layer{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;pointer-events:auto;overflow:hidden}
-.fx-ts{background:radial-gradient(circle,rgba(70,20,110,.35),rgba(10,0,20,.75));animation:fxfade 2.4s ease forwards}
-.fx-go{display:flex;flex-wrap:wrap;gap:6px 18px;justify-content:center;max-width:90vw;transform:rotate(-8deg)}
-.fx-go span{font:900 64px/1 system-ui,"Noto Sans JP","Hiragino Sans",sans-serif;color:#b04cff;-webkit-text-stroke:3px #1a0026;text-shadow:4px 4px 0 #1a0026;display:inline-block;animation:fxshake .18s linear infinite,fxpop .75s cubic-bezier(.2,1.6,.4,1) both}
-.fx-go span:nth-child(2){animation-delay:0s,.12s}.fx-go span:nth-child(3){animation-delay:0s,.24s}.fx-go span:nth-child(4){animation-delay:0s,.36s}
-.fx-gear{background:rgba(0,0,0,.35);animation:fxfade 2.55s ease forwards}
-.fx-gear svg{width:min(70vw,300px);height:auto}
-.fx-gear .g1{transform-origin:110px 110px;animation:fxspin 2.55s cubic-bezier(.6,0,.4,1) forwards}
-.fx-gear .g2{transform-origin:212px 150px;animation:fxspinr 2.55s cubic-bezier(.6,0,.4,1) forwards}
-.fx-gear .g3{transform-origin:160px 236px;animation:fxspinr 2.55s cubic-bezier(.6,0,.4,1) forwards}
+.fx-ts{background:radial-gradient(circle at 50% 60%,rgba(255,255,255,.92),rgba(235,232,245,.88));animation:fxfade 2.4s ease forwards}
+.fx-do{position:absolute;font:900 48px/1 "Hiragino Sans","Noto Sans JP","Yu Gothic",system-ui,sans-serif;color:#111;letter-spacing:-.08em;white-space:nowrap;
+  -webkit-text-stroke:1.5px #111;text-shadow:3px 3px 0 rgba(0,0,0,.18);transform-origin:center;animation:fxpop .55s cubic-bezier(.2,1.6,.4,1) both}
+.fx-do i{display:inline-block;font-style:normal;animation:fxshake .16s linear infinite}
+.fx-gear{background:radial-gradient(circle,rgba(40,28,8,.55),rgba(0,0,0,.72));animation:fxfade 2.55s ease forwards}
+.fx-gear svg{width:min(88vw,380px);height:auto;filter:drop-shadow(0 6px 10px rgba(0,0,0,.5))}
+.fx-gear .spark{transform-box:fill-box;transform-origin:center;animation:fxtw 1.1s ease-in-out infinite}
+.fx-gear .spark:nth-of-type(2n){animation-delay:.35s}.fx-gear .spark:nth-of-type(3n){animation-delay:.7s}
+@keyframes fxtw{0%,100%{opacity:0;transform:scale(.3) rotate(0)}50%{opacity:1;transform:scale(1) rotate(45deg)}}
+.fx-gear .g1{transform-origin:118px 122px;animation:fxspin 2.55s cubic-bezier(.6,0,.4,1) forwards}
+.fx-gear .g2{transform-origin:276px 170px;animation:fxspinr 2.55s cubic-bezier(.6,0,.4,1) forwards}
+.fx-gear .g3{transform-origin:178px 270px;animation:fxspinr 2.55s cubic-bezier(.6,0,.4,1) forwards}
 .fx-invert{filter:invert(1) hue-rotate(180deg)}
 @keyframes fxshake{0%{transform:translate(0,0)}25%{transform:translate(2px,-2px)}50%{transform:translate(-2px,1px)}75%{transform:translate(1px,2px)}100%{transform:translate(0,0)}}
 @keyframes fxpop{from{opacity:0;scale:2.4}to{opacity:1;scale:1}}
@@ -119,14 +122,43 @@ function say(text) {
 /* ---------- 對外 ---------- */
 /** 結束進餐：擬聲字＋時間凍結音 → 語音「砸瓦魯多」→ 齒輪逐漸停止 */
 export function timeStop() {
+  // 語音要在按下的當下開始播（手機規定要使用者按了才能出聲）；音檔開頭留了 0.45 秒空白
+  const voice = on('fxVoice') ? playVoice() : new Promise(r => setTimeout(r, 1800));
   if (on('fxSound')) freezeSound();
   if (on('fxVisual')) {
     const main = document.querySelector('main');
     if (main) { main.classList.add('fx-invert'); setTimeout(() => main.classList.remove('fx-invert'), 675); }
-    layer('fx-ts', '<div class="fx-go"><span>ゴ</span><span>ゴ</span><span>ゴ</span><span>ゴ</span></div>', 2400);
+    layer('fx-ts', doDoDo(), 2400);
   }
-  const voice = on('fxVoice') ? new Promise(r => setTimeout(() => say('砸瓦魯多').then(r), 525)) : new Promise(r => setTimeout(r, 1800));
   voice.then(() => gearsStop());
+}
+
+/** 「ドドドド」：從左下往右上，一串越來越大的擬聲字（原創排版） */
+function doDoDo() {
+  const W = Math.min(window.innerWidth, 560), Hh = window.innerHeight, rows = 9, out = [];
+  for (let i = 0; i < rows; i++) {
+    const t = i / (rows - 1), size = 22 + t * t * 88;
+    const x = 6 + t * (W * 0.62) + (i % 2 ? -18 : 18), y = Hh * 0.86 - t * Hh * 0.72;
+    const txt = i % 3 === 2 ? 'ドドド' : 'ドドドド';
+    out.push('<div class="fx-do" style="left:' + x.toFixed(0) + 'px;top:' + y.toFixed(0) + 'px;font-size:' + size.toFixed(0) + 'px;transform:rotate(' + (-24 + (i % 2) * 8) + 'deg) skewX(-10deg);animation-delay:' + (i * 0.07).toFixed(2) + 's">'
+      + txt.split('').map(c => '<i>' + c + '</i>').join('') + '</div>');
+  }
+  return out.join('');
+}
+
+/** 播放錄好的「砸瓦魯多」；不能播時改用手機內建語音 */
+function playVoice() {
+  return new Promise(res => {
+    let done = false; const fin = () => { if (!done) { done = true; res(); } };
+    setTimeout(fin, 4200);
+    try {
+      const a = new Audio('assets/zawarudo.m4a?v=' + (window.APP_VERSION || ''));
+      a.onended = fin;
+      a.onerror = () => { say('砸瓦魯多').then(fin); };
+      const p = a.play();
+      if (p && p.catch) p.catch(() => { say('砸瓦魯多').then(fin); });
+    } catch (e) { say('砸瓦魯多').then(fin); }
+  });
 }
 
 function gearPath(cx, cy, teeth, rIn, rOut) {
@@ -139,10 +171,29 @@ function gearPath(cx, cy, teeth, rIn, rOut) {
   return 'M' + pts.join('L') + 'Z';
 }
 
+let gid = 0;
+/** 一個金屬齒輪：齒＋輪盤（金色漸層）、輪輻之間的鏤空（深色）、軸心與螺栓 */
+function gearG(cls, cx, cy, n, ri, ro, id) {
+  const spokes = 5, rimIn = ri * 0.72, hub = ri * 0.3, parts = [];
+  parts.push('<path d="' + gearPath(cx, cy, n, ri, ro) + '" fill="url(#' + id + ')" stroke="#4a3006" stroke-width="2.5" stroke-linejoin="round"/>');
+  parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + (ri - 3) + '" fill="none" stroke="#fff6c8" stroke-opacity=".55" stroke-width="2"/>');
+  for (let k = 0; k < spokes; k++) {                      // 輪輻之間的鏤空窗（扇形）
+    const a1 = (k / spokes) * Math.PI * 2 + 0.22, a2 = ((k + 1) / spokes) * Math.PI * 2 - 0.22;
+    const p = (r, a) => (cx + r * Math.cos(a)).toFixed(1) + ' ' + (cy + r * Math.sin(a)).toFixed(1);
+    parts.push('<path d="M' + p(hub + 6, a1) + ' L' + p(rimIn, a1) + ' A' + rimIn + ' ' + rimIn + ' 0 0 1 ' + p(rimIn, a2) + ' L' + p(hub + 6, a2) + ' A' + (hub + 6) + ' ' + (hub + 6) + ' 0 0 0 ' + p(hub + 6, a1) + 'Z" fill="#2b1a04" fill-opacity=".78" stroke="#4a3006" stroke-width="1.5"/>');
+  }
+  parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + hub + '" fill="url(#' + id + ')" stroke="#4a3006" stroke-width="2"/>');
+  for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; parts.push('<circle cx="' + (cx + hub * 0.62 * Math.cos(a)).toFixed(1) + '" cy="' + (cy + hub * 0.62 * Math.sin(a)).toFixed(1) + '" r="' + Math.max(2, hub * 0.12).toFixed(1) + '" fill="#6b4710" stroke="#fff3b0" stroke-width=".8"/>'); }
+  parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + (hub * 0.3).toFixed(1) + '" fill="#2b1a04"/>');
+  return '<g class="' + cls + '">' + parts.join('') + '</g>';
+}
 function gearSvg() {
-  const g = (cls, cx, cy, n, ri, ro, hole, col) =>
-    `<g class="${cls}"><path d="${gearPath(cx, cy, n, ri, ro)}" fill="${col}" stroke="#0b3d2e" stroke-width="3" stroke-linejoin="round"/><circle cx="${cx}" cy="${cy}" r="${hole}" fill="#0b3d2e"/></g>`;
-  return `<svg viewBox="0 0 300 300" aria-hidden="true">${g('g1', 110, 110, 12, 62, 80, 16, '#3ccf9a')}${g('g2', 212, 150, 8, 36, 50, 10, '#7aa2ff')}${g('g3', 160, 236, 9, 40, 55, 11, '#f0a14a')}</svg>`;
+  const id = 'fxg' + (++gid);
+  const star = (x, y, r) => '<path class="spark" d="M' + x + ' ' + (y - r) + ' L' + (x + r * 0.22) + ' ' + (y - r * 0.22) + ' L' + (x + r) + ' ' + y + ' L' + (x + r * 0.22) + ' ' + (y + r * 0.22) + ' L' + x + ' ' + (y + r) + ' L' + (x - r * 0.22) + ' ' + (y + r * 0.22) + ' L' + (x - r) + ' ' + y + ' L' + (x - r * 0.22) + ' ' + (y - r * 0.22) + 'Z" fill="#fffbe0"/>';
+  return '<svg viewBox="0 0 380 380" aria-hidden="true"><defs><linearGradient id="' + id + '" x1="0" y1="0" x2="1" y2="1">'
+    + '<stop offset="0" stop-color="#fff4b8"/><stop offset=".35" stop-color="#e7bd45"/><stop offset=".7" stop-color="#b07a1c"/><stop offset="1" stop-color="#6e4610"/></linearGradient></defs>'
+    + gearG('g1', 118, 122, 14, 84, 104, id) + gearG('g2', 276, 170, 10, 54, 70, id) + gearG('g3', 178, 270, 11, 60, 78, id)
+    + star(70, 60, 14) + star(300, 80, 10) + star(220, 330, 12) + star(330, 260, 9) + star(40, 250, 8) + '</svg>';
 }
 
 /** 齒輪由快逐漸停止（時間停止） */
@@ -155,8 +206,5 @@ export function gearsStop() {
 export function gears(after) {
   if (on('fxSound')) gearSound();
   if (!on('fxVisual')) { after && after(); return; }
-  const g = (cls, cx, cy, n, ri, ro, hole, col) =>
-    `<g class="${cls}"><path d="${gearPath(cx, cy, n, ri, ro)}" fill="${col}" stroke="#0b3d2e" stroke-width="3" stroke-linejoin="round"/><circle cx="${cx}" cy="${cy}" r="${hole}" fill="#0b3d2e"/></g>`;
-  const svg = `<svg viewBox="0 0 300 300" aria-hidden="true">${g('g1', 110, 110, 12, 62, 80, 16, '#3ccf9a')}${g('g2', 212, 150, 8, 36, 50, 10, '#7aa2ff')}${g('g3', 160, 236, 9, 40, 55, 11, '#f0a14a')}</svg>`;
-  layer('fx-gear', svg, 2550, after);
+  layer('fx-gear', gearSvg(), 2550, after);
 }

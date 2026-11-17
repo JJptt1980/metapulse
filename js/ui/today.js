@@ -4,7 +4,8 @@ import { backupReminder } from '../sync.js';
 import { connect, linked } from '../drive.js';
 import { h, icon, fold, hm, WD, fmtPts } from './common.js';
 import { usage, localDate, addDays } from '../points.js';
-import { ledger } from '../ledger.js';
+import { ledger, allActivity } from '../ledger.js';
+import { exerciseCard } from './exercise.js';
 import { nextDose } from '../records.js';
 import { medCard } from './meds.js';
 import { weeklyCard } from './weekly.js';
@@ -91,7 +92,7 @@ export function renderToday(root) {
       h('button.ghost.full', { type: 'button', onclick: () => document.querySelector('nav.tabs button[data-t="set"]').click() }, '前往設定'));
   } else {
     const mode = S.prefs.weekStart || 'roll';
-    const lg = ledger(S.meals, S.activity, b.dailyPoints, todayStr, mode);
+    const lg = ledger(S.meals, allActivity(S), b.dailyPoints, todayStr, mode);
     const td = lg.today, bal = lg.balance, total = lg.total;
     const label = mode === 'roll' ? '7 天存摺' : '本週存摺';
     if (fastFirst) {
@@ -126,8 +127,9 @@ export function renderToday(root) {
     h('div.row.between', h('b.one', nd.left === 0 ? '今天要注射・' + nd.site : '注射已逾期 ' + (-nd.left) + ' 天・' + nd.site), h('span', { style: { color: 'var(--c1)', fontWeight: 650, flex: '0 0 auto' } }, '去記錄 ›'))) : null;
   if (mc && mc.urgent) root.append(mc.card);
   if (doseLine) root.append(doseLine);
-  if (fastFirst) { root.append(fastingCard(), top); }
-  else { root.append(top, fastingCard()); }
+  const ex = b.ok ? exerciseCard() : null;
+  if (fastFirst) { root.append(fastingCard(), top); if (ex) root.append(ex); }
+  else { root.append(top); if (ex) root.append(ex); root.append(fastingCard()); }
   if (mc && !mc.urgent) root.append(mc.card);
   const adv = latestAdviceCard();
   if (adv) root.append(adv);

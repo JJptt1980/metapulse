@@ -4,6 +4,9 @@
 import { BUDGET } from './config.js';
 import { localDate, addDays, roundTo } from './points.js';
 
+/** Health Connect 的每日運動消耗＋手動記的運動 */
+export const allActivity = S => [...(S.activity || []), ...(S.exercise || [])];
+
 export const WEEK_MODES = [['roll', '最近 7 天（滾動）'], ['sun', '每週日開始'], ['mon', '每週一開始']];
 
 const dow = d => { const [y, m, dd] = d.split('-').map(Number); return new Date(y, m - 1, dd).getDay(); };
@@ -15,7 +18,7 @@ export function windowStart(today, mode = 'roll') {
   return addDays(today, -(BUDGET.rollingDays - 1));
 }
 
-/** 每天吃了幾點、運動加回幾點 */
+/** 每天吃了幾點、運動加回幾點（activity 可以混 Health Connect 的每日消耗與手動記的運動，都用 date＋kcal） */
 function perDay(meals, activity) {
   const eat = {}, ref = {}, kcal = {}, prot = {}, cnt = {};
   for (const m of meals || []) { const d = localDate(m.at); eat[d] = (eat[d] || 0) + (+m.points || 0); kcal[d] = (kcal[d] || 0) + (+m.kcal || 0); prot[d] = (prot[d] || 0) + (+m.protein || 0); cnt[d] = (cnt[d] || 0) + 1; }
@@ -44,8 +47,9 @@ export function ledger(meals, activity, daily, today, mode = 'roll', from = null
  */
 export function weekReport(S, daily, today, mode = 'roll') {
   const start = windowStart(today, mode), prevStart = addDays(start, -7), prevEnd = addDays(start, -1);
-  const cur = ledger(S.meals, S.activity, daily, today, mode, start);
-  const prev = ledger(S.meals, S.activity, daily, prevEnd, mode, prevStart);
+  const act = allActivity(S);
+  const cur = ledger(S.meals, act, daily, today, mode, start);
+  const prev = ledger(S.meals, act, daily, prevEnd, mode, prevStart);
   const done = l => l.days.filter(d => d.date < today);
   const stat = l => { const ds = done(l); return { logged: ds.filter(d => d.logged).length, healthy: ds.filter(d => d.logged && d.left >= 0).length, refund: roundTo(l.days.reduce((a, d) => a + d.refund, 0)), days: ds.length }; };
   const wAvg = (a, b) => { const v = (S.entries || []).filter(e => e.wt > 0 && e.date >= a && e.date <= b).map(e => e.wt); return v.length ? v.reduce((p, q) => p + q, 0) / v.length : null; };

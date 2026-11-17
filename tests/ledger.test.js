@@ -35,3 +35,11 @@ test('週報：達標天數、和上一段比較（今天不算）', () => {
   assert.equal(r.prev.logged, 7);
   assert.equal(r.weightChange, -1);
 });
+
+test('手動記的運動也加回點數', async () => {
+  const { allActivity } = await import('../js/ledger.js');
+  const S = { activity: [{ date: '2026-11-18', kcal: 80 }], exercise: [{ id: 'x', date: '2026-11-18', kcal: 400, type: 'bball', minutes: 30 }] };
+  const l = ledger([], allActivity(S), 44, '2026-11-18', 'mon');
+  assert.equal(l.today.refund, (80 + 400) * 0.75 / 40);   // 9 點
+  assert.equal(l.today.left, 44 + 9);
+});

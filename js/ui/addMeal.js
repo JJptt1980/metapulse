@@ -52,10 +52,14 @@ export function openAddMeal(o = {}) {
     async function runAI(args) {
       if (!L.geminiKey) { status.textContent = ''; status.append(h('div.notice', '還沒設定 Gemini API key。請到「設定」→「AI 辨識」輸入。')); return; }
       busy?.abort(); busy = new AbortController();
-      setBusy(args.image ? '辨識照片中…' : '估算中…');
+      const t0 = Date.now(), label = args.image ? '辨識照片中…' : '估算中…';
+      setBusy(label);
+      const me = busy, tick = setInterval(() => { if (busy !== me) return clearInterval(tick); setBusy(label + ' ' + Math.floor((Date.now() - t0) / 1000) + ' 秒'); }, 1000);
       try {
-        const res = await analyzeMeal({ key: L.geminiKey, model: L.geminiModel, api: L.geminiApi, signal: busy.signal, ...args });
+        const res = await analyzeMeal({ key: L.geminiKey, model: L.geminiModel, api: L.geminiApi, prefer: L.geminiApiOk, fast: L.geminiFast !== false, signal: busy.signal, ...args });
         busy = null; status.textContent = '';
+        if (L.geminiApiOk !== res.api) { L.geminiApiOk = res.api; commitLocal(); }
+        status.append(h('div.mu.tiny', '辨識花了 ' + (res.ms / 1000).toFixed(1) + ' 秒'));
         if (!res.items.length) { status.append(h('div.notice', '沒有辨識到食物。' + (res.note || ''))); return; }
         for (const x of res.items) items.push({
           name: x.name, per: x.per, servingGrams: x.servingGrams || 100, fistsPerServing: x.fistsPerServing,
@@ -77,7 +81,7 @@ export function openAddMeal(o = {}) {
           const f = ev.target.files && ev.target.files[0]; ev.target.value = '';
           if (!f) return;
           try {
-            const img = await shrinkImage(f, 1024, 0.85);
+            const img = await shrinkImage(f);
             prev.textContent = ''; prev.append(h('img.preview', { src: img.dataUrl, alt: '餐點照片' }));
             if (L.keepThumbs) { try { thumb = (await shrinkImage(f, 200, 0.7, true)).dataUrl; } catch (e) { /* 縮圖失敗不影響 */ } }
             runAI({ image: img, text: hint.value.trim() });

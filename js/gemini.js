@@ -72,13 +72,12 @@ async function post(url, key, body, signal) {
   return j;
 }
 
-async function viaInteractions({ key, model, text, image, signal }) {
+async function viaInteractions({ key, model, text, image, signal, fast }) {
   const input = [{ type: 'text', text: INSTRUCTIONS + '\n\n' + text }];
   if (image) input.push({ type: 'image', data: image.data, mime_type: image.mime });
-  const j = await post(BASE + '/interactions', key, {
-    model, input,
-    response_format: { type: 'text', mime_type: 'application/json', schema: FOOD_SCHEMA },
-  }, signal);
+  const body = { model, input, response_format: { type: 'text', mime_type: 'application/json', schema: FOOD_SCHEMA } };
+  if (fast) body.generation_config = { thinking_level: 'minimal' };
+  const j = await post(BASE + '/interactions', key, body, signal);
   if (j?.errors?.length) throw new Error(j.errors[0].message || 'Gemini 回傳錯誤');
   let out = j?.output_text;
   if (!out) for (const s of j?.steps || []) if (s.type === 'model_output') for (const c of s.content || []) if (c.type === 'text') out = (out || '') + c.text;
@@ -86,45 +85,64 @@ async function viaInteractions({ key, model, text, image, signal }) {
   return out;
 }
 
-async function viaGenerateContent({ key, model, text, image, signal }) {
+async function viaGenerateContent({ key, model, text, image, signal, fast }) {
   const parts = [{ text: INSTRUCTIONS + '\n\n' + text }];
   if (image) parts.push({ inline_data: { mime_type: image.mime, data: image.data } });
+  const generationConfig = { responseMimeType: 'application/json', responseJsonSchema: FOOD_SCHEMA };
+  if (fast) generationConfig.thinkingConfig = { thinkingLevel: 'minimal' };
   const j = await post(BASE + '/models/' + encodeURIComponent(model) + ':generateContent', key, {
-    contents: [{ role: 'user', parts }],
-    generationConfig: { responseMimeType: 'application/json', responseJsonSchema: FOOD_SCHEMA },
+    contents: [{ role: 'user', parts }], generationConfig,
   }, signal);
   const out = (j?.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
   if (!out) throw new Error('Gemini 沒有回傳內容' + (j?.promptFeedback?.blockReason ? '（' + j.promptFeedback.blockReason + '）' : ''));
   return out;
 }
 
+const VIA = { interactions: viaInteractions, generateContent: viaGenerateContent };
+const fatal = e => e.name === 'AbortError' || e.status === 401 || e.status === 403 || e.status === 429;
+
+/** 少思考模式：模型不支援 minimal 時（400），自動改用不指定思考程度再試一次 */
+async function callApi(name, o) {
+  try { return await VIA[name](o); }
+  catch (e) {
+    if (o.fast && e.status === 400 && /think/i.test(e.message)) return VIA[name]({ ...o, fast: false });
+    throw e;
+  }
+}
+
 /**
- * @param {{key, model, api:'auto'|'interactions'|'generateContent', text?:string, image?:{data:string(base64), mime:string}, signal?}} o
- * @returns {Promise<{items, note, raw, api}>}
+ * @param {{key, model, api:'auto'|'interactions'|'generateContent', prefer?:string, fast?:boolean,
+ *          text?:string, image?:{data:string(base64), mime:string}, signal?}} o
+ *   prefer：自動模式下先試的 API（上次成功的那一種）
+ * @returns {Promise<{items, note, raw, api, ms}>}
  */
 export async function analyzeMeal(o) {
   if (!o.key) throw new Error('請先在「設定」輸入 Gemini API key');
   if (!o.model) throw new Error('請先在「設定」輸入模型名稱');
+  const t0 = Date.now();
   const text = o.image
     ? '請辨識這張照片中的餐點。' + (o.text ? '補充說明：' + o.text : '')
     : '使用者描述的餐點：' + o.text;
   const api = o.api || 'auto';
+  const args = { ...o, text, fast: o.fast !== false };
   let raw, used;
-  if (api === 'generateContent') { raw = await viaGenerateContent({ ...o, text }); used = 'generateContent'; }
+  if (api !== 'auto') { raw = await callApi(api, args); used = api; }
   else {
-    try { raw = await viaInteractions({ ...o, text }); used = 'interactions'; }
+    const first = o.prefer === 'generateContent' ? 'generateContent' : 'interactions';
+    const second = first === 'interactions' ? 'generateContent' : 'interactions';
+    try { raw = await callApi(first, args); used = first; }
     catch (e) {
-      if (api !== 'auto' || e.name === 'AbortError' || e.status === 401 || e.status === 403 || e.status === 429) throw e;
-      raw = await viaGenerateContent({ ...o, text }); used = 'generateContent';
+      if (fatal(e)) throw e;
+      raw = await callApi(second, args); used = second;
     }
   }
   let parsed;
   try { parsed = parseJSON(raw); } catch (e) { throw new Error('Gemini 回傳的不是有效 JSON'); }
-  return { ...clean(parsed), raw, api: used };
+  return { ...clean(parsed), raw, api: used, ms: Date.now() - t0 };
 }
 
-/** 把照片縮小成 JPEG（送 API 用 maxW≈1024；縮圖用 200） */
-export function shrinkImage(file, maxW = 1024, quality = 0.85, byWidth = false) {
+/** 把照片縮小成 JPEG（送 API 用 768；縮圖用 200） */
+export function shrinkImage(file, maxW = 768, quality = 0.8, byWidth = false) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();

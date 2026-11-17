@@ -101,20 +101,25 @@ function aiCard() {
   const api = h('select', h('option', { value: 'auto' }, '自動（先用 Interactions，失敗改 generateContent）'), h('option', { value: 'interactions' }, 'Interactions API'), h('option', { value: 'generateContent' }, 'generateContent'));
   api.value = L.geminiApi || 'auto';
   api.onchange = () => { L.geminiApi = api.value; commitLocal(); };
+  const fast = h('input', { type: 'checkbox', checked: L.geminiFast !== false });
+  fast.onchange = () => { L.geminiFast = fast.checked; commitLocal(); };
   const out = h('div.small', { style: { marginTop: '8px' } });
   const test = h('button.ghost.full', { type: 'button' }, '測試連線（估算「一顆水煮蛋」）');
   test.onclick = async () => {
     out.textContent = ''; out.append(h('span.spin'), ' 測試中…'); test.disabled = true;
     try {
-      const r = await analyzeMeal({ key: L.geminiKey, model: L.geminiModel, api: L.geminiApi, text: '一顆水煮蛋' });
+      const r = await analyzeMeal({ key: L.geminiKey, model: L.geminiModel, api: L.geminiApi, prefer: L.geminiApiOk, fast: L.geminiFast !== false, text: '一顆水煮蛋' });
+      if (L.geminiApiOk !== r.api) { L.geminiApiOk = r.api; commitLocal(); }
       const x = r.items[0];
-      out.textContent = ''; out.append(h('div.notice.ok', '✓ 連線成功（' + r.api + '）：' + (x ? x.name + '，一份約 ' + Math.round(x.servingGrams) + ' g、' + Math.round(x.per.kcal) + ' kcal、蛋白質 ' + r1(x.per.protein) + ' g' : '沒有回傳食物')));
+      out.textContent = ''; out.append(h('div.notice.ok', '✓ 連線成功（' + r.api + '，' + (r.ms / 1000).toFixed(1) + ' 秒）：' + (x ? x.name + '，一份約 ' + Math.round(x.servingGrams) + ' g、' + Math.round(x.per.kcal) + ' kcal、蛋白質 ' + r1(x.per.protein) + ' g' : '沒有回傳食物')));
     } catch (e) { out.textContent = ''; out.append(h('div.notice', '✗ ' + (e.message || e))); }
     test.disabled = false;
   };
   card.append(
     h('label', 'API key'), h('div.row', h('div.grow', key), eye),
     h('label', '模型名稱'), model, dl,
+    h('div.mu.tiny', { style: { marginTop: '4px' } }, '想要更快可試 gemini-3.5-flash-lite（較快，但可能較不準）。'),
+    h('label.row', { style: { color: 'var(--tx)', marginTop: '12px', fontSize: '15px' } }, fast, '速度優先（讓模型少思考）'),
     fold('ai-adv', h('span.small.mu', '進階：API 介面'), [h('label', 'API 介面'), api]),
     test, out,
     h('div.mu.tiny', { style: { marginTop: '8px', lineHeight: 1.6 } },

@@ -47,3 +47,30 @@ test('金鑰錯誤（403）不重試，直接回報', async () => {
 test('沒有 key 時提示', async () => {
   await assert.rejects(analyzeMeal({ key: '', model: 'm', text: 'x' }), /API key/);
 });
+
+test('速度優先：送出 thinking_level minimal；不支援時自動拿掉再試', async () => {
+  const bodies = [];
+  globalThis.fetch = async (url, o) => {
+    const b = JSON.parse(o.body); bodies.push(b);
+    if (b.generation_config) return res(400, { error: { message: 'thinking_level is not supported for this model' } });
+    return res(200, { steps: [{ type: 'model_output', content: [{ type: 'text', text: answer }] }] });
+  };
+  const r = await analyzeMeal({ key: 'k', model: 'm', text: 'x' });
+  assert.equal(bodies[0].generation_config.thinking_level, 'minimal');
+  assert.equal(bodies[1].generation_config, undefined);
+  assert.equal(r.api, 'interactions');
+  assert.ok(r.ms >= 0);
+});
+
+test('自動模式記得上次成功的 API，直接先用它', async () => {
+  const urls = [];
+  globalThis.fetch = async (url, o) => {
+    urls.push(url);
+    const b = JSON.parse(o.body);
+    assert.equal(b.generationConfig.thinkingConfig.thinkingLevel, 'minimal');
+    return res(200, { candidates: [{ content: { parts: [{ text: answer }] } }] });
+  };
+  const r = await analyzeMeal({ key: 'k', model: 'm', text: 'x', prefer: 'generateContent' });
+  assert.equal(urls.length, 1);
+  assert.equal(r.api, 'generateContent');
+});

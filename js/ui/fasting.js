@@ -230,7 +230,7 @@ export function fastingCard() {
   return card;
 }
 
-/** 結束斷食：斷食停在這一刻（記成一次斷食），齒輪特效後打開「記一餐」；不記就關閉，斷食一樣算結束 */
+/** 結束斷食：斷食停在這一刻（記成一次斷食），齒輪加速轉動的特效；要記餐請另外按「記一餐」 */
 function endFastBtn(f) {
   return h('button.pri.full', {
     type: 'button',
@@ -241,7 +241,7 @@ function endFastBtn(f) {
       else { if (open) open.end = now; S.fasts.push({ id: uid('f'), start: new Date(f.start).toISOString(), end: now, mode: S.prefs.fastMode || 'PURE_DYNAMIC' }); }
       S.prefs.fastOverride = null;
       commit();
-      gears(() => openAddMeal());
+      gears();
     },
   }, '結束斷食');
 }

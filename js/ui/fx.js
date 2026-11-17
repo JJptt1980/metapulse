@@ -24,6 +24,8 @@ function style() {
 @keyframes fxshake{0%{transform:translate(0,0)}25%{transform:translate(2px,-2px)}50%{transform:translate(-2px,1px)}75%{transform:translate(1px,2px)}100%{transform:translate(0,0)}}
 @keyframes fxpop{from{opacity:0;scale:2.4}to{opacity:1;scale:1}}
 @keyframes fxfade{0%,75%{opacity:1}100%{opacity:0}}
+.fx-gear.stop{animation:fxfade 2.4s ease forwards}
+.fx-gear.stop .g1,.fx-gear.stop .g2,.fx-gear.stop .g3{animation-duration:1.9s;animation-timing-function:cubic-bezier(.05,.75,.25,1)}
 @keyframes fxspin{to{transform:rotate(540deg)}}
 @keyframes fxspinr{to{transform:rotate(-810deg)}}`;
   document.head.appendChild(s);
@@ -82,26 +84,49 @@ function gearSound() {
   }
 }
 
+/** 齒輪減速：喀啦聲由快變慢，最後「喀」一聲停住 */
+function gearStopSound() {
+  const a = audio(); if (!a) return;
+  const t0 = a.currentTime, buf = noiseBuf(a, 0.03);
+  let t = t0, gap = 0.045;
+  const click = (at, vol, freq) => {
+    const n = a.createBufferSource(); n.buffer = buf;
+    const f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq; f.Q.value = 6;
+    const g = a.createGain(); g.gain.setValueAtTime(vol, at); g.gain.exponentialRampToValueAtTime(0.001, at + 0.04);
+    n.connect(f); f.connect(g); g.connect(a.destination); n.start(at); n.stop(at + 0.05);
+  };
+  while (t < t0 + 1.6) { click(t, 0.45, 1800 + Math.random() * 600); t += gap; gap *= 1.17; }
+  click(t + 0.05, 0.9, 900);   // 最後停住
+}
+
 /** 用手機內建語音念出 */
 function say(text) {
+  return new Promise(res => {
+  let done = false; const fin = () => { if (!done) { done = true; res(); } };
+  setTimeout(fin, 3500);               // 有些手機不會回報念完，最多等 3.5 秒
   try {
-    const sp = window.speechSynthesis; if (!sp) return;
+    const sp = window.speechSynthesis; if (!sp) { fin(); return; }
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'zh-TW'; u.rate = 0.75; u.pitch = 0.5; u.volume = 1;
     const v = sp.getVoices().find(x => /zh[-_](TW|HK|CN)/i.test(x.lang));
     if (v) u.voice = v;
+    u.onend = fin; u.onerror = fin;
     sp.cancel(); sp.speak(u);
-  } catch (e) { /* 不支援就略過 */ }
+  } catch (e) { fin(); }
+  });
 }
 
 /* ---------- 對外 ---------- */
+/** 結束進餐：擬聲字＋時間凍結音 → 語音「砸瓦魯多」→ 齒輪逐漸停止 */
 export function timeStop() {
   if (on('fxSound')) freezeSound();
-  if (on('fxVoice')) setTimeout(() => say('砸瓦魯多'), 350);
-  if (!on('fxVisual')) return;
-  const main = document.querySelector('main');
-  if (main) { main.classList.add('fx-invert'); setTimeout(() => main.classList.remove('fx-invert'), 450); }
-  layer('fx-ts', '<div class="fx-go"><span>ゴ</span><span>ゴ</span><span>ゴ</span><span>ゴ</span></div>', 1600);
+  if (on('fxVisual')) {
+    const main = document.querySelector('main');
+    if (main) { main.classList.add('fx-invert'); setTimeout(() => main.classList.remove('fx-invert'), 450); }
+    layer('fx-ts', '<div class="fx-go"><span>ゴ</span><span>ゴ</span><span>ゴ</span><span>ゴ</span></div>', 1600);
+  }
+  const voice = on('fxVoice') ? new Promise(r => setTimeout(() => say('砸瓦魯多').then(r), 350)) : new Promise(r => setTimeout(r, 1200));
+  voice.then(() => gearsStop());
 }
 
 function gearPath(cx, cy, teeth, rIn, rOut) {
@@ -114,6 +139,19 @@ function gearPath(cx, cy, teeth, rIn, rOut) {
   return 'M' + pts.join('L') + 'Z';
 }
 
+function gearSvg() {
+  const g = (cls, cx, cy, n, ri, ro, hole, col) =>
+    `<g class="${cls}"><path d="${gearPath(cx, cy, n, ri, ro)}" fill="${col}" stroke="#0b3d2e" stroke-width="3" stroke-linejoin="round"/><circle cx="${cx}" cy="${cy}" r="${hole}" fill="#0b3d2e"/></g>`;
+  return `<svg viewBox="0 0 300 300" aria-hidden="true">${g('g1', 110, 110, 12, 62, 80, 16, '#3ccf9a')}${g('g2', 212, 150, 8, 36, 50, 10, '#7aa2ff')}${g('g3', 160, 236, 9, 40, 55, 11, '#f0a14a')}</svg>`;
+}
+
+/** 齒輪由快逐漸停止（時間停止） */
+export function gearsStop() {
+  if (on('fxSound')) gearStopSound();
+  if (on('fxVisual')) layer('fx-gear stop', gearSvg(), 2400);
+}
+
+/** 結束斷食：齒輪由靜止加速轉動（時間重新開始） */
 export function gears(after) {
   if (on('fxSound')) gearSound();
   if (!on('fxVisual')) { after && after(); return; }

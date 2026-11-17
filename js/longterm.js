@@ -65,3 +65,29 @@ export function longTermMessage(lt, wt) {
   if (wt && wt.fast) t += '；體重下降速度偏快';
   return t;
 }
+
+/**
+ * 淨體重趨勢（淨體重＝體重 ×（1 − 體脂率））：最近 28 天平均和再前 28 天平均比較，不看單日
+ * 同時看最近 28 天的平均蛋白質（只算有餐點記錄的日子，不含今天）
+ * @returns {{ready, cur, prev, change, pct, curDays, prevDays, protein, mealDays, falling, lowProtein, alert}}
+ */
+export function leanTrend(entries, meals, proteinTarget, todayStr, cfg = LONGTERM) {
+  const W = cfg.leanWindow, from1 = addDays(todayStr, -(W - 1)), from0 = addDays(todayStr, -(2 * W - 1));
+  const day = {};
+  for (const e of entries || []) {
+    if (!(e.wt > 0 && e.fat > 0) || e.date > todayStr || e.date < from0) continue;
+    (day[e.date] = day[e.date] || []).push(e.wt * (1 - e.fat / 100));
+  }
+  const cur = [], prev = [];
+  for (const d in day) { const v = day[d].reduce((a, b) => a + b, 0) / day[d].length; (d >= from1 ? cur : prev).push(v); }
+  const avg = a => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+  const ready = cur.length >= cfg.leanMinDays && prev.length >= cfg.leanMinDays;
+  const c = avg(cur), p = avg(prev);
+  const change = ready ? c - p : null, pct = ready ? (c - p) / p * 100 : null;
+  const pro = {};
+  for (const m of meals || []) { const d = localDate(m.at); if (d >= from1 && d < todayStr) pro[d] = (pro[d] || 0) + (+m.protein || 0); }
+  const pd = Object.values(pro), protein = pd.length >= cfg.leanMinMealDays ? avg(pd) : null;
+  const falling = ready && pct <= -cfg.leanDropPct;
+  const lowProtein = protein !== null && proteinTarget > 0 && protein < proteinTarget;
+  return { ready, cur: c, prev: p, change, pct, curDays: cur.length, prevDays: prev.length, protein, mealDays: pd.length, falling, lowProtein, alert: falling && lowProtein };
+}

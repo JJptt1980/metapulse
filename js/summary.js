@@ -1,6 +1,7 @@
 /* 數據摘要（純文字，給 AI 搭配圖表圖片分析）：移植同步版的摘要，另外加上飲食、斷食、運動消耗的統計（純函數） */
 import { sortEntries, onBoard, dn, fromDn } from './records.js';
 import { localDate } from './points.js';
+import { leanTrend } from './longterm.js';
 
 const f = (n, d = 1) => (+n).toFixed(d);
 const sg = n => { const r = Math.round(n * 10) / 10; return (r > 0 ? '+' : r < 0 ? '−' : '') + Math.abs(r).toFixed(1); };
@@ -141,6 +142,10 @@ export function buildSummary(S, P, today, withPrompt = true) {
     bl.push('- ' + name + '：第一筆 ' + f(first.v, d) + u + '（' + first.d + '），最新 ' + f(last.v, d) + u + '（' + last.d + '），變化 ' + (d ? sg(diff) : (diff > 0 ? '+' : diff < 0 ? '−' : '') + Math.abs(Math.round(diff))) + u + '；範圍 ' + f(mn.v, d) + '–' + f(mx.v, d) + (ago ? '；約 30 天前 ' + f(ago.v, d) + '（' + ago.d + '）' : '') + '。');
   });
   if (bl.length) { L.push(''); L.push('■ 體組成（同一天多筆取平均）'); bl.forEach(x => L.push(x)); }
+  const lt = leanTrend(es, S.meals, P && P.ok ? P.proteinTarget : 0, today);
+  if (lt.ready) {
+    L.push('- 淨體重（體重 ×（1 − 體脂率））：最近 28 天平均 ' + f(lt.cur) + ' kg（' + lt.curDays + ' 天），再前 28 天 ' + f(lt.prev) + ' kg（' + lt.prevDays + ' 天），變化 ' + sg(lt.change) + ' kg（' + sg(lt.pct) + '%）' + (lt.protein !== null ? '；同期平均每天蛋白質 ' + f(lt.protein, 0) + ' g' : '') + '。');
+  }
 
   // 飲食：只算有記錄的日子（今天還沒結束，不算進平均）
   const fd = Object.keys(food).filter(d => d < today).sort();

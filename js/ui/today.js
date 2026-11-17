@@ -7,7 +7,7 @@ import { usage, localDate, addDays, exerciseRefund } from '../points.js';
 import { openAddMeal } from './addMeal.js';
 import { latestAdviceCard } from './advice.js';
 import { doseCard } from './log.js';
-import { fastingCard, longTermCard } from './fasting.js';
+import { fastingCard, longTermCard, leanCard } from './fasting.js';
 
 const r1 = x => Math.round(x * 10) / 10;
 
@@ -103,6 +103,8 @@ export function renderToday(root) {
   root.append(top);
   const lt = longTermCard();
   if (lt) root.append(lt);
+  const lc = leanCard();
+  if (lc) root.append(lc);
   const dc = doseCard(true);
   if (dc) root.append(dc);
   root.append(fastingCard());

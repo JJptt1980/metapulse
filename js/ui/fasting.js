@@ -6,7 +6,7 @@ import { HOURLY_MESSAGES, OMAD_DONE } from '../messages.js';
 import { currentFast, fastEnd, lastMealGroup, mealShift, stageAt, stageStarts, hourlyMessage, hybridSuggestion, eatingWindow, hm, dur } from '../fasting.js';
 import { openAddMeal } from './addMeal.js';
 import { timeStop, gears } from './fx.js';
-import { longTermIndex, weightTrend, longTermMessage } from '../longterm.js';
+import { longTermIndex, weightTrend, longTermMessage, leanTrend } from '../longterm.js';
 import { usage, localDate, roundTo } from '../points.js';
 import { onBoard, dn } from '../records.js';
 
@@ -283,4 +283,35 @@ export function longTermStatusCard() {
     wt.weeklyPct !== null ? h('div', '體重（14 天平均）最近每週變化約 ' + (-wt.weeklyPct).toFixed(1) + '%。') : null,
     msg ? h('div', { style: { color: 'var(--warn)', fontWeight: 600 } }, msg) : null);
   return h('div.card', fold('lt-status', h('div.grow', h('h2', { style: { margin: 0 } }, '長期攝取指數'), h('div.mu.small', { style: { marginTop: '2px' } }, sum)), [h('div', { style: { marginTop: '10px' } }, body)]));
+}
+
+/* ---------- 淨體重趨勢 ---------- */
+const f1 = x => (Math.round(x * 10) / 10).toFixed(1);
+export function leanStatus() {
+  const b = plan();
+  return leanTrend(S.entries, S.meals, b.ok ? b.proteinTarget : 0, localDate(new Date()));
+}
+const LEAN_MSG = '淨體重可能在下降，建議留意蛋白質攝取';
+function leanBody(t) {
+  return h('div.small.mu', { style: { lineHeight: 1.7 } },
+    h('div', '淨體重＝體重 ×（1 − 體脂率），也就是扣掉脂肪後剩下的重量（肌肉、骨頭、水分等）。'),
+    t.ready ? h('div.num', '最近 28 天平均 ' + f1(t.cur) + ' kg（' + t.curDays + ' 天），再前 28 天 ' + f1(t.prev) + ' kg（' + t.prevDays + ' 天），變化 ' + (t.change >= 0 ? '+' : '') + f1(t.change) + ' kg（' + (t.pct >= 0 ? '+' : '') + t.pct.toFixed(1) + '%）。') : null,
+    t.protein !== null ? h('div.num', '最近 28 天平均每天蛋白質 ' + Math.round(t.protein) + ' g（目標 ' + plan().proteinTarget + ' g，' + t.mealDays + ' 天有記錄）。') : h('div', '最近 28 天的餐點記錄少於 10 天，暫時不判斷蛋白質。'),
+    h('div', '體脂機每天的數字會跳動，所以只比較 28 天的平均。平均下降超過 1.5%、而且蛋白質平均沒達到目標，才會提醒。'),
+    h('div', '這只是提醒，不會自動改點數。減重時多吃蛋白質、做一點肌力運動，有助於保住肌肉。'));
+}
+/** 今日頁：只有觸發時才顯示一行，點開看說明 */
+export function leanCard() {
+  const t = leanStatus();
+  if (!t.alert) return null;
+  return h('div.card', { style: { borderColor: 'var(--warn)' } }, fold('lean-card', h('div.small', { style: { fontWeight: 600 } }, LEAN_MSG), [h('div', { style: { marginTop: '8px' } }, leanBody(t))]));
+}
+/** 圖表頁：淨體重趨勢的狀態（資料累積中也顯示） */
+export function leanStatusCard() {
+  const t = leanStatus();
+  if (!S.entries.some(e => e.wt > 0 && e.fat > 0)) return null;
+  const sum = !t.ready ? '資料累積中（最近 28 天 ' + t.curDays + ' 天、再前 28 天 ' + t.prevDays + ' 天有體脂，各需要 6 天）'
+    : '28 天平均 ' + f1(t.cur) + ' kg・變化 ' + (t.change >= 0 ? '+' : '') + f1(t.change) + ' kg' + (t.alert ? '・有提醒' : '');
+  return h('div.card', fold('lean-status', h('div.grow', h('h2', { style: { margin: 0 } }, '淨體重趨勢'), h('div.mu.small', { style: { marginTop: '2px' } }, sum)),
+    [h('div', { style: { marginTop: '10px' } }, leanBody(t), t.alert ? h('div.small', { style: { color: 'var(--warn)', fontWeight: 600, marginTop: '6px' } }, LEAN_MSG) : null)]));
 }

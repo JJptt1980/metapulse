@@ -72,4 +72,8 @@ export const LONGTERM = {
   recentDays: 28, recentValidRatio: 0.7,   // 最近 28 天中有效日要佔 70% 以上
   low: 1.0, veryLow: 0.8,
   weightMaDays: 14, fastLossPct: 1,        // 體重 14 天移動平均，每週下降超過體重 1% → 補一句
+  // 淨體重趨勢：最近 28 天平均 vs 再前 28 天平均（不看單日；阻抗式體脂每天波動大）
+  leanWindow: 28, leanMinDays: 6,          // 每段至少 6 天有體重＋體脂
+  leanDropPct: 1.5,                        // 平均下降超過 1.5% 才算「明顯下滑」
+  leanMinMealDays: 10,                     // 最近 28 天至少 10 天有餐點記錄，才判斷蛋白質
 };

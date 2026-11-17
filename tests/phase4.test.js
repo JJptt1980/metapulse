@@ -98,3 +98,23 @@ test('各類記錄最新日期', async () => {
   assert.equal(latestText(es), '體重 11/17 06:57・血壓 11/17 06:59・注射 11/16・體組成 11/17 06:57');
   assert.equal(latestText([]), '');
 });
+
+test('淨體重趨勢：28 天平均明顯下滑且蛋白質不足才提醒', async () => {
+  const { leanTrend } = await import('../js/longterm.js');
+  const { addDays } = await import('../js/points.js');
+  const today = '2026-11-30', es = [], ms = [];
+  for (let i = 0; i < 56; i++) {
+    const d = addDays(today, -i), lean = i < 28 ? 68 : 70;      // 最近 28 天淨體重少約 2.9%
+    es.push({ date: d, wt: 100, fat: 100 - lean });
+    if (i >= 1 && i <= 20) ms.push({ at: new Date(d + 'T12:00:00').toISOString(), protein: 70 });
+  }
+  let t = leanTrend(es, ms, 100, today);
+  assert.equal(t.ready, true);
+  assert.ok(Math.abs(t.change + 2) < 1e-9);
+  assert.equal(t.falling, true);
+  assert.equal(t.protein, 70);
+  assert.equal(t.alert, true);
+  assert.equal(leanTrend(es, ms, 60, today).alert, false, '蛋白質有達標就不提醒');
+  assert.equal(leanTrend(es, ms.slice(0, 5), 100, today).alert, false, '餐點記錄太少不判斷蛋白質');
+  assert.equal(leanTrend(es.slice(0, 20), ms, 100, today).ready, false, '前一段資料不夠');
+});

@@ -6,7 +6,7 @@ import { buildSummary } from '../summary.js';
 import { capPlugin } from '../health.js';
 import { localDate } from '../points.js';
 import { sortEntries, onBoard, dn, fromDn, md, wdOf } from '../records.js';
-import { longTermStatusCard } from './fasting.js';
+import { longTermStatusCard, leanStatusCard } from './fasting.js';
 
 const CHART_URL = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
 let loading = null;
@@ -320,4 +320,6 @@ export async function renderCharts(root) {
     draw();
   }
   root.append(longTermStatusCard());
+  const ls = leanStatusCard();
+  if (ls) root.append(ls);
 }

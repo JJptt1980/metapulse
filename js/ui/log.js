@@ -82,66 +82,65 @@ export function openEntry(o = {}) {
   });
 }
 
-/* ---------- 儀器卡 ---------- */
+/* ---------- 儀器卡：收起時一行重點，右邊「＋」直接記錄 ---------- */
+function addBtn(type, label) {
+  return h('button.link.small', { type: 'button', style: { whiteSpace: 'nowrap', flexShrink: 0 }, onclick: ev => { ev.preventDefault(); ev.stopPropagation(); openEntry({ type }); } }, icon('plus'), ' ' + label);
+}
+/** 卡片標題列：標題＋一行摘要＋按鈕；body 為展開內容（沒有就不收合） */
+function deviceCard(key, title, summary, btn, body, { force = false, accent = false } = {}) {
+  const head = h('div.row.grow', h('div.grow', h('h2', { style: { margin: 0 } }, title), h('div.small.num', { style: { marginTop: '2px', color: accent ? 'var(--ac)' : '', fontWeight: accent ? 650 : 400 } }, summary)), btn);
+  const card = h('div.card', accent ? { style: { borderColor: 'var(--ac)' } } : null);
+  card.append(body ? fold(key, head, [body], { open: false, force }) : head);
+  return card;
+}
+
 function scaleCard(es) {
   const w = lastOf(es, x => x.wt > 0);
-  const card = h('div.card');
-  card.append(h('div.row.between', h('h2', { style: { margin: 0 } }, '體重計'), h('button.link.small', { type: 'button', onclick: () => openEntry({ type: 'wt' }) }, icon('plus'), ' 記錄')));
-  if (!w && !lastOf(es, TYPES.bc)) { card.append(h('div.empty', '還沒有體重記錄')); return card; }
+  if (!w && !lastOf(es, TYPES.bc)) return deviceCard('dev-scale', '體重計', '還沒有記錄', addBtn('wt', '記錄'));
   const b = w ? bmi(w.wt, S.profile.height) : null;
   const tw = +S.profile.targetWeight;
-  card.append(h('div.grid3', { style: { marginTop: '10px' } },
-    stat('體重' + (w ? ' · ' + md(w.date) : ''), w ? w.wt : '–', 'kg'),
-    stat('BMI' + (b ? '（' + b.label + '）' : ''), b ? r1(b.value) : '–'),
-    stat(tw ? '距目標 ' + tw : '距目標', w && tw ? (w.wt - tw > 0 ? r1(w.wt - tw) : '已達成') : '–', w && tw && w.wt > tw ? 'kg' : '')));
-  if (!S.profile.height) card.append(h('div.mu.tiny', { style: { marginTop: '6px' } }, '在設定填身高後可顯示 BMI。'));
+  const summary = (w ? w.wt + ' kg' : '–') + (b ? '・BMI ' + r1(b.value) + '（' + b.label + '）' : '') + (w && tw ? (w.wt > tw ? '・距目標 ' + r1(w.wt - tw) + ' kg' : '・已達目標') : '');
   const more = [];
+  if (w) more.push(stat('體重 · ' + md(w.date), w.wt, 'kg'));
   for (const [k, label, unit] of [['fat', '體脂率', '%'], ['mus', '骨骼肌率', '%'], ['vis', '內臟脂肪', ''], ['bage', '身體年齡', '歲'], ['bmr', '基礎代謝', 'kcal']]) {
     const x = lastOf(es, y => y[k] > 0);
     if (x) more.push(stat(label + ' · ' + md(x.date), x[k], unit));
   }
   const lm = lastOf(es, y => y.wt > 0 && y.fat > 0);
   if (lm) more.push(stat('淨體重 · ' + md(lm.date), r1(leanMass(lm)), 'kg'));
-  if (more.length) card.append(fold('scale-more', h('span.small.mu', '更多（體組成）'), [h('div.grid3', { style: { marginTop: '8px', rowGap: '12px' } }, ...more)]));
-  return card;
+  const body = h('div', { style: { marginTop: '10px' } }, h('div.grid3', { style: { rowGap: '12px' } }, ...more),
+    !S.profile.height ? h('div.mu.tiny', { style: { marginTop: '6px' } }, '在設定填身高後可顯示 BMI。') : null);
+  return deviceCard('dev-scale', '體重計', summary, addBtn('wt', '記錄'), body);
 }
 
 function bpCard(es) {
   const x = lastOf(es, y => y.sys > 0 && y.dia > 0) || lastOf(es, y => y.pul > 0);
-  const card = h('div.card');
-  card.append(h('div.row.between', h('h2', { style: { margin: 0 } }, '血壓計'), h('button.link.small', { type: 'button', onclick: () => openEntry({ type: 'bp' }) }, icon('plus'), ' 記錄')));
-  if (!x) { card.append(h('div.empty', '還沒有血壓記錄')); return card; }
-  card.append(h('div.grid3', { style: { marginTop: '10px' } },
-    stat('血壓 · ' + when(x), x.sys > 0 ? x.sys + '/' + x.dia : '–', 'mmHg'),
-    stat('脈搏', x.pul > 0 ? x.pul : '–', x.pul > 0 ? '次/分' : ''), h('div')));
-  return card;
+  if (!x) return deviceCard('dev-bp', '血壓計', '還沒有記錄', addBtn('bp', '記錄'));
+  const summary = (x.sys > 0 ? x.sys + '/' + x.dia + ' mmHg' : '') + (x.pul > 0 ? '・脈搏 ' + x.pul : '') + '・' + when(x);
+  return deviceCard('dev-bp', '血壓計', summary, addBtn('bp', '記錄'));
 }
 
-/** 注射卡：compact=true（今日頁）時平常收成一行，接近注射日自動展開 */
+/** 注射卡：平常收成一行，注射日前一天、當天或逾期時自動展開一次並以強調色提醒 */
 export function doseCard(compact) {
   const es = sortEntries(S.entries);
   const ds = es.filter(TYPES.dose);
   const today = localDate(new Date());
   const nd = nextDose(es, today);
-  if (compact && !nd) return null;
-  const due = nd && nd.left <= 1;
-  const card = h('div.card', due ? { style: { borderColor: 'var(--ac)' } } : null);
-  const leftTxt = nd ? (nd.left > 0 ? '還有 ' + nd.left + ' 天' : nd.left === 0 ? '就是今天' : '已逾期 ' + (-nd.left) + ' 天') : '';
-  const line = nd ? '下次注射：' + md(nd.due) + '（週' + wdOf(nd.due) + '，' + leftTxt + '）' : '尚無注射記錄';
+  if (!nd) return compact ? null : deviceCard('dose-card', '注射', '還沒有注射記錄', addBtn('dose', '記錄'));
+  const due = nd.left <= 1;
+  const leftTxt = nd.left > 0 ? '還有 ' + nd.left + ' 天' : nd.left === 0 ? '就是今天' : '已逾期 ' + (-nd.left) + ' 天';
+  const line = '下次注射：' + md(nd.due) + '（週' + wdOf(nd.due) + '，' + leftTxt + '）・' + nd.site;
   const ob = ds.length ? onBoard(es, dn(today), +S.profile.halfLife || 120) : 0;
   const body = h('div', { style: { marginTop: '10px' } },
     h('div.grid3',
-      stat('建議部位', nd ? nd.site : SITES[0]),
-      stat('最近一次' + (nd ? ' · ' + md(nd.last.date) : ''), nd ? nd.last.dose : '–', 'mg'),
-      stat('預估體內殘留', ds.length ? r1(ob) : '–', 'mg')),
+      stat('建議部位', nd.site),
+      stat('最近一次 · ' + md(nd.last.date), nd.last.dose, 'mg'),
+      stat('預估體內殘留', r1(ob), 'mg')),
     h('button' + (due ? '.pri' : '.ghost') + '.full', { type: 'button', onclick: () => openEntry({ type: 'dose' }) }, '記錄這次注射'),
     h('div.mu.tiny', { style: { marginTop: '6px' } }, '殘留量依半衰期簡化估算，只看趨勢，不能用來決定劑量。'));
-  const title = h('span', { style: due ? { color: 'var(--ac)', fontWeight: 650 } : { fontWeight: 600 } }, line);
-  if (!compact) { card.append(h('div.row.between', h('h2', { style: { margin: 0 } }, '注射'), null), h('div.small', { style: { marginTop: '4px' } }, title), body); return card; }
   let force = false;
-  if (due && L.doseForced !== nd.due) { force = true; L.doseForced = nd.due; commitLocal(); }
-  card.append(fold('dose-card', title, [body], { open: false, force }));
-  return card;
+  if (due && L.doseForced !== nd.due + (compact ? 't' : 'l')) { force = true; L.doseForced = nd.due + (compact ? 't' : 'l'); commitLocal(); }
+  return deviceCard('dose-card', '注射', line, null, body, { force, accent: due });
 }
 
 /* ---------- 記錄列表 ---------- */
@@ -170,26 +169,35 @@ function row(e) {
       noteText(e) ? h('div.mu.tiny', noteText(e)) : null));
 }
 
+const TYPE_NAMES = { all: '全部', dose: '注射', wt: '體重', bp: '血壓', bc: '體組成' };
+const RECENT_LIMIT = 5;
+let showAllRecent = false;
+
 function listCard(all) {
   const card = h('div.card');
   const sort = L.logSort || 'desc', type = L.logType || 'all';
   const rows = all.filter(e => type === 'all' || TYPES[type](e));
-  card.append(h('h2', '記錄列表'),
-    pills([['desc', '新到舊'], ['asc', '舊到新']], sort, v => { L.logSort = v; commitLocal(); rerender(); }),
-    h('div', { style: { marginTop: '6px' } }, pills([['all', '全部'], ['dose', '注射'], ['wt', '體重'], ['bp', '血壓'], ['bc', '體組成']], type, v => { L.logType = v; commitLocal(); rerender(); })));
   const from7 = addDays(localDate(new Date()), -6);
   const recent = rows.filter(e => e.date >= from7);
   const byMon = new Map();
   for (const e of rows.filter(e => e.date < from7)) { const k = e.date.slice(0, 7); if (!byMon.has(k)) byMon.set(k, []); byMon.get(k).push(e); }
   const months = [...byMon.keys()].sort().reverse();
   const jump = h('select', { 'aria-label': '跳到月份' }, h('option', { value: '' }, '跳到月份…'), ...months.map(k => h('option', { value: k }, k.slice(0, 4) + ' 年 ' + +k.slice(5) + ' 月')));
-  card.append(h('div.row', { style: { marginTop: '10px' } }, h('div.mu.small.grow', '符合 ' + rows.length + ' 筆，共 ' + all.length + ' 筆'), months.length ? h('div', { style: { width: '150px' } }, jump) : null));
+  card.append(h('h2', '記錄列表'));
   if (!all.length) { card.append(h('div.empty', '還沒有記錄。可以從上面的卡片新增，或到設定「從同步版匯入」。')); return card; }
+  card.append(fold('log-filter', h('span.small.mu', TYPE_NAMES[type] + '・' + (sort === 'desc' ? '新到舊' : '舊到新') + '・符合 ' + rows.length + ' 筆'), [h('div', { style: { marginTop: '8px' } },
+    pills([['all', '全部'], ['dose', '注射'], ['wt', '體重'], ['bp', '血壓'], ['bc', '體組成']], type, v => { L.logType = v; commitLocal(); rerender(); }),
+    h('div.row', { style: { marginTop: '8px' } }, pills([['desc', '新到舊'], ['asc', '舊到新']], sort, v => { L.logSort = v; commitLocal(); rerender(); }), h('div.grow'),
+      months.length ? h('div', { style: { width: '140px' } }, jump) : null))]));
   if (!rows.length) { card.append(h('div.empty', '沒有符合條件的記錄。')); return card; }
   const blocks = [];
   if (recent.length) {
-    const l = h('div.list'); (sort === 'desc' ? recent.slice().reverse() : recent).forEach(e => l.append(row(e)));
-    blocks.push(h('div', { style: { marginTop: '8px' } }, h('div.mu.tiny', '最近 7 天'), l));
+    const ordered = sort === 'desc' ? recent.slice().reverse() : recent;
+    const shown = showAllRecent ? ordered : ordered.slice(0, RECENT_LIMIT);
+    const l = h('div.list'); shown.forEach(e => l.append(row(e)));
+    const box = h('div', { style: { marginTop: '8px' } }, h('div.mu.tiny', '最近 7 天'), l);
+    if (ordered.length > shown.length) box.append(h('button.link.small', { type: 'button', onclick: () => { showAllRecent = true; rerender(); } }, '顯示最近 7 天全部（還有 ' + (ordered.length - shown.length) + ' 筆）'));
+    blocks.push(box);
   }
   const monEls = {};
   for (const k of months) {
@@ -216,4 +224,5 @@ export function renderLog(el) {
   el.textContent = '';
   const all = sortEntries(S.entries);
   el.append(scaleCard(all), bpCard(all), doseCard(false), listCard(all));
+  showAllRecent = false;
 }

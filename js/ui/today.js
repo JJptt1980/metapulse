@@ -55,6 +55,7 @@ function mealRow(m) {
 const md = d => +d.slice(5, 7) + '/' + +d.slice(8, 10);
 const wd = d => { const [y, m, dd] = d.split('-').map(Number); return WD[new Date(y, m - 1, dd).getDay()]; };
 
+let showAllMeals = false;
 export function renderToday(root) {
   root.textContent = '';
   const todayStr = localDate(new Date());
@@ -96,7 +97,11 @@ export function renderToday(root) {
   listCard.append(h('div.row.between', h('h2', { style: { margin: 0 } }, '今日餐點'),
     todays.length ? h('span.mu.small.num', todays.length + ' 餐 · ' + fmtPts(u.today.points) + ' 點') : null));
   const tl = h('div.list', { style: { marginTop: '6px' } });
-  if (todays.length) todays.forEach(g => tl.append(mealRow(g)));
+  const MEAL_LIMIT = 4;
+  if (todays.length) {
+    todays.slice(0, showAllMeals ? todays.length : MEAL_LIMIT).forEach(g => tl.append(mealRow(g)));
+    if (!showAllMeals && todays.length > MEAL_LIMIT) tl.append(h('button.link.small', { type: 'button', onclick: () => { showAllMeals = true; renderToday(root); } }, '顯示今天全部（還有 ' + (todays.length - MEAL_LIMIT) + ' 餐）'));
+  }
   else tl.append(h('div.empty', '今天還沒有記錄。按上方「記一餐」開始。'));
   listCard.append(tl);
 
@@ -121,4 +126,5 @@ export function renderToday(root) {
     }
   }
   root.append(listCard);
+  showAllMeals = false; // 下次重畫回到只顯示前幾餐
 }

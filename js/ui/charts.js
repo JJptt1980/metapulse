@@ -164,7 +164,7 @@ export function addHover(sp, pal) {
 }
 
 let live = [];
-const OPEN_DEFAULT = { w: true, d: true };
+const OPEN_DEFAULT = { w: true };
 
 export async function renderCharts(root) {
   live.forEach(c => c && c.destroy()); live = [];

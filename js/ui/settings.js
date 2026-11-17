@@ -1,6 +1,6 @@
 /* 設定分頁：個人資料與預算、AI 辨識、常用食物庫、外觀、資料、免責聲明 */
 import { S, L, commit, commitLocal, plan, currentWeight } from '../state.js';
-import { h, icon, toast, fold, pills, val, $, section, sumLine, kvTable } from './common.js';
+import { h, icon, toast, fold, pills, val, $, section, sumLine, kvTable, sectionBudget } from './common.js';
 import { ACTIVITY_LEVELS, BUDGET } from '../config.js';
 import { bmrMifflin, ageFrom } from '../points.js';
 import { libraryManager } from './library.js';
@@ -187,6 +187,7 @@ function prefsCard() {
 
 export function renderSettings(root) {
   root.textContent = '';
+  sectionBudget.left = 1;
   root.append(healthCard(), syncImportCard(), driveCard(), profileCard(), aiCard(),
     (() => { const sl = sumLine(); sl.textContent = S.foodLibrary.length ? S.foodLibrary.length + ' 項' : '還沒有常用食物'; return section('lib', '常用食物庫', sl, [libraryManager(itemCard)]); })(),
     prefsCard(), backupTextCard(),

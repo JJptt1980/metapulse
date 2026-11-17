@@ -83,7 +83,10 @@ export function fold(key, summary, body, { open = false, force = false, cls = ''
 }
 
 /** 設定頁用的區塊：收合時只顯示標題與一行摘要 sumEl（由呼叫端更新文字） */
+export const sectionBudget = { left: 1 };
 export function section(key, title, sumEl, body, open = false) {
+  // 一次最多自動展開一張（使用者自己開合過的，以使用者的為準）
+  if (L.collapsed[key] === undefined) { if (open && sectionBudget.left > 0) sectionBudget.left--; else open = false; }
   return h('div.card', fold(key, h('div.grow', h('h2', { style: { margin: 0 } }, title), sumEl),
     [h('div', { style: { marginTop: '12px' } }, ...[].concat(body))], { open }));
 }

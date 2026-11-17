@@ -93,4 +93,7 @@ window.addEventListener('load', () => setTimeout(checkUpdate, 1500));
 
 show('today');
 initDrive();
+
+/* 斷食計時：今日頁每分鐘更新一次 */
+setInterval(() => { if (tab === 'today' && !sheetOpen() && !document.hidden) renderToday($('p-today')); }, 60000);
 showDisclaimerOnce();

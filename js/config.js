@@ -35,3 +35,39 @@ export const PORTION = {
   quick: [0.5, 1, 1.5, 2],
   sliderMin: 0.1, sliderMax: 1.5, sliderStep: 0.05,
 };
+
+/** 斷食階段（距上一餐的小時數，寬區間）。文字可以自己改 */
+export const FASTING = {
+  stages: [
+    { from: 0, text: '消化中，主要使用剛吃進的血糖' },
+    { from: 4, text: '開始使用儲存的醣類（肝醣）' },
+    { from: 12, text: '逐漸偏向使用脂肪' },
+    { from: 16, text: '長時間斷食中' },
+    { from: 20, text: '斷食時間偏長，身體分解蛋白質的比例可能逐漸增加' },
+  ],
+  // 上一餐比較大時，所有階段往後挪；特別大的一餐最多挪 2 小時
+  bigMeal: { kcal: 800, carb: 100, shift: 1 },
+  hugeMeal: { kcal: 1200, carb: 150, shift: 2 },
+  barHours: 24,              // 進度條畫到幾小時
+  fastingFromHours: 4,       // 自由模式：距上一餐超過幾小時算「斷食中」（卡片展開）
+  plans: { '16:8': 16, '18:6': 18, '20:4': 20, '24H': 23 },  // 斷食時數；24H＝一天一餐（約 23 小時斷食＋1 小時進食）
+  // 依施打週期建議（只建議、不自動切換；最多到 18:6）
+  hybrid: {
+    rules: [
+      { fromDay: 1, toDay: 3, plan: '18:6' },   // 施打當天＝第 1 天
+      { fromDay: 4, toDay: 7, plan: '16:8' },
+    ],
+    fallback: '16:8',        // 沒有施打記錄、或超過第 7 天
+    safer: '16:8',           // 減重太快或長期指數有提示時，一律建議這個
+  },
+};
+
+/** 長期攝取指數 */
+export const LONGTERM = {
+  alpha: 0.05,               // 長期指數 = 前一天 × (1 − α) + 當日比例 × α
+  minDayRatio: 0.3,          // 當天記錄熱量低於基礎代謝的 30% → 記錄不完整，跳過
+  minValidDays: 21,          // 至少累積幾個有效記錄日才顯示提示
+  recentDays: 28, recentValidRatio: 0.7,   // 最近 28 天中有效日要佔 70% 以上
+  low: 1.0, veryLow: 0.8,
+  weightMaDays: 14, fastLossPct: 1,        // 體重 14 天移動平均，每週下降超過體重 1% → 補一句
+};

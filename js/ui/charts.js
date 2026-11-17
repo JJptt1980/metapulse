@@ -4,6 +4,7 @@ import { S, L, commitLocal } from '../state.js';
 import { h, fold, pills } from './common.js';
 import { localDate } from '../points.js';
 import { sortEntries, onBoard, dn, fromDn, md, wdOf } from '../records.js';
+import { longTermStatusCard } from './fasting.js';
 
 const CHART_URL = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
 let loading = null;
@@ -170,7 +171,7 @@ export async function renderCharts(root) {
   live.forEach(c => c && c.destroy()); live = [];
   root.textContent = '';
   const any = S.entries.some(e => e.wt > 0 || e.dose > 0 || e.sys > 0 || e.fat > 0 || e.mus > 0 || e.vis > 0 || e.bage > 0 || e.bmr > 0);
-  if (!any) { root.append(h('div.card', h('div.empty', '還沒有可以畫圖的資料。到「記錄」新增，或到「設定」→「備份與匯入」把同步版的記錄搬過來。'))); return; }
+  if (!any) { root.append(h('div.card', h('div.empty', '還沒有可以畫圖的資料。到「記錄」新增，或到「設定」→「備份與匯入」把同步版的記錄搬過來。'))); root.append(longTermStatusCard()); return; }
   const range = L.chartRange || 'all', bpv = L.chartBp || 'all';
   root.append(h('div.card', h('div.row.between', h('b.small', '範圍'), pills([['30', '近 30 天'], ['90', '近 90 天'], ['all', '全部']], range, v => { L.chartRange = v; commitLocal(); renderCharts(root); })),
     h('div.mu.tiny', { style: { marginTop: '6px' } }, '只影響圖表，不會刪除任何記錄。手指左右拖曳可查看當天數值。')));
@@ -201,4 +202,5 @@ export async function renderCharts(root) {
     root.append(h('div.card', d));
     draw();
   }
+  root.append(longTermStatusCard());
 }

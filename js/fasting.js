@@ -1,0 +1,104 @@
+/* 斷食：距上一餐的時間、階段、每小時提示、三種模式（純函數，不碰畫面與儲存） */
+import { FASTING } from './config.js';
+
+const H = 3600000;
+const pad = n => String(n).padStart(2, '0');
+const dnLocal = d => Math.round(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5);
+const dnStr = s => { const [y, m, d] = s.split('-').map(Number); return Math.round(Date.UTC(y, m - 1, d) / 864e5); };
+
+/**
+ * 目前的斷食狀態
+ * - 平常：從最後一筆餐點算起
+ * - 按了「開始斷食」且之後沒有記餐：從按下的時間算起
+ * - 按了「結束斷食」但還沒記餐：從結束的時間重新算（視為吃過了）
+ * @returns {{start:number|null, hours:number, manual:boolean, lastMeal:object[]|null}}
+ */
+export function currentFast(meals, fasts, now = Date.now()) {
+  let lastAt = -Infinity, lastGroup = null;
+  for (const m of meals) {
+    const t = new Date(m.at).getTime();
+    if (t <= now && t > lastAt) { lastAt = t; lastGroup = m.group || m.id; }
+  }
+  const lastMeal = lastGroup ? meals.filter(m => (m.group || m.id) === lastGroup) : null;
+  const f = (fasts || []).filter(x => x && x.start).reduce((a, b) => (!a || new Date(b.start) > new Date(a.start) ? b : a), null);
+  let start = lastAt, manual = false;
+  if (f) {
+    const fs = new Date(f.start).getTime();
+    if (!f.end && fs > lastAt && fs <= now) { start = fs; manual = true; }
+    else if (f.end) { const fe = new Date(f.end).getTime(); if (fe > start && fe <= now) start = fe; }
+  }
+  if (!Number.isFinite(start)) return { start: null, hours: 0, manual: false, lastMeal: null };
+  return { start, hours: Math.max(0, (now - start) / H), manual, lastMeal: manual ? null : lastMeal };
+}
+
+/** 上一餐偏大時，階段整體往後挪幾小時（0、1、2） */
+export function mealShift(lastMeal, cfg = FASTING) {
+  if (!lastMeal || !lastMeal.length) return 0;
+  const kcal = lastMeal.reduce((a, m) => a + (+m.kcal || 0), 0), carb = lastMeal.reduce((a, m) => a + (+m.carb || 0), 0);
+  if (kcal > cfg.hugeMeal.kcal || carb > cfg.hugeMeal.carb) return cfg.hugeMeal.shift;
+  if (kcal > cfg.bigMeal.kcal || carb > cfg.bigMeal.carb) return cfg.bigMeal.shift;
+  return 0;
+}
+
+/** 各階段的開始小時（第一個階段固定從 0 開始，其他加上 shift） */
+export const stageStarts = (shift = 0, cfg = FASTING) => cfg.stages.map((s, i) => (i ? s.from + shift : 0));
+
+export function stageAt(hours, shift = 0, cfg = FASTING) {
+  const st = stageStarts(shift, cfg);
+  let i = 0;
+  for (let k = 0; k < st.length; k++) if (hours >= st[k]) i = k;
+  return { index: i, text: cfg.stages[i].text, nextAt: st[i + 1] ?? null };
+}
+
+function hash(s) { let x = 2166136261; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 16777619); } return x >>> 0; }
+
+/** 每小時提示：同一次斷食的同一小時固定同一句 */
+export function hourlyMessage(hours, start, messages) {
+  const h = Math.min(24, Math.max(0, Math.floor(hours)));
+  let k = h;
+  while (k > 0 && !(messages[k] && messages[k].length)) k--;
+  const list = messages[k] || [''];
+  return list[hash(String(start) + ':' + h) % list.length];
+}
+
+/**
+ * 依施打週期建議（HYBRID_GUIDED）。只建議、不自動切換。
+ * @param flags {fastLoss:boolean, lowIntake:boolean} 減重太快、長期指數有提示
+ */
+export function hybridSuggestion(entries, todayStr, flags = {}, cfg = FASTING) {
+  const doses = entries.filter(e => e.dose > 0).map(e => e.date).sort();
+  const last = doses[doses.length - 1];
+  const hy = cfg.hybrid;
+  if (!last) return { plan: hy.fallback, day: null, hasDose: false, reason: '還沒有施打記錄，先用 ' + hy.fallback + ' 當參考。' };
+  const day = dnStr(todayStr) - dnStr(last) + 1;
+  if (flags.fastLoss || flags.lowIntake) {
+    return { plan: hy.safer, day, hasDose: true, reason: (flags.fastLoss ? '最近體重下降偏快' : '最近一段時間熱量偏低') + '，建議用比較溫和的 ' + hy.safer + '。' };
+  }
+  const r = hy.rules.find(x => day >= x.fromDay && day <= x.toDay);
+  if (r) return { plan: r.plan, day, hasDose: true, reason: '施打後第 ' + day + ' 天，建議 ' + r.plan + '。' };
+  return { plan: hy.fallback, day, hasDose: true, reason: '距離上次施打已第 ' + day + ' 天，建議 ' + hy.fallback + '。' };
+}
+
+/**
+ * 自選固定（STRICT_MANUAL）的進食窗口
+ * @param plan '16:8' | '18:6' | '20:4' | '24H'；windowStart 'HH:MM'
+ * @returns {{inWindow, opensAt, closesAt, eatHours, fastHours}} 時間都是毫秒
+ */
+export function eatingWindow(plan, windowStart, now = Date.now(), cfg = FASTING) {
+  const fastHours = cfg.plans[plan] ?? 16, eatHours = 24 - fastHours;
+  const [hh, mm] = String(windowStart || '12:00').split(':').map(Number);
+  const base = new Date(now); base.setHours(hh || 0, mm || 0, 0, 0);
+  let cur = null, next = null;
+  for (const off of [-1, 0, 1]) {
+    const o = new Date(base); o.setDate(o.getDate() + off);
+    const open = o.getTime(), close = open + eatHours * H;
+    if (open <= now && now < close) cur = { open, close };
+    if (open > now && (!next || open < next)) next = open;
+  }
+  if (cur) return { inWindow: true, opensAt: cur.open, closesAt: cur.close, eatHours, fastHours };
+  return { inWindow: false, opensAt: next, closesAt: next + eatHours * H, eatHours, fastHours };
+}
+
+export const hm = t => { const d = new Date(t); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+export const dur = hours => { const h = Math.floor(hours), m = Math.floor((hours - h) * 60); return h + ' 小時 ' + pad(m) + ' 分'; };
+export { dnLocal };

@@ -166,6 +166,8 @@ export function openAddMeal(o = {}) {
         });
       });
       S.meals.sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : 0);
+      // 記了餐點，就結束進行中的手動斷食
+      for (const x of S.fasts || []) if (!x.end && x.start < at) x.end = at;
       const ok = commit();
       closeSheet();
       if (ok) requestAdvice(group);

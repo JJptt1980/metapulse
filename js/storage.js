@@ -72,6 +72,7 @@ export function normalizeMeal(m) {
     kcal: num(m.kcal), protein: num(m.protein), carb: num(m.carb), fat: num(m.fat), fiber: num(m.fiber), points: num(m.points),
     source: str(m.source) || 'manual', foodId: str(m.foodId), aiRaw: m.aiRaw ? str(m.aiRaw) : undefined,
     thumb: m.thumb ? str(m.thumb) : undefined,
+    advice: m.advice && typeof m.advice === 'object' ? { review: str(m.advice.review), next: str(m.advice.next), cheer: str(m.advice.cheer), local: !!m.advice.local } : undefined,
   };
 }
 

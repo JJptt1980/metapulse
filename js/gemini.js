@@ -72,10 +72,10 @@ async function post(url, key, body, signal) {
   return j;
 }
 
-async function viaInteractions({ key, model, text, image, signal, fast }) {
-  const input = [{ type: 'text', text: INSTRUCTIONS + '\n\n' + text }];
+async function viaInteractions({ key, model, prompt, schema, image, signal, fast }) {
+  const input = [{ type: 'text', text: prompt }];
   if (image) input.push({ type: 'image', data: image.data, mime_type: image.mime });
-  const body = { model, input, response_format: { type: 'text', mime_type: 'application/json', schema: FOOD_SCHEMA } };
+  const body = { model, input, response_format: { type: 'text', mime_type: 'application/json', schema } };
   if (fast) body.generation_config = { thinking_level: 'minimal' };
   const j = await post(BASE + '/interactions', key, body, signal);
   if (j?.errors?.length) throw new Error(j.errors[0].message || 'Gemini 回傳錯誤');
@@ -85,10 +85,10 @@ async function viaInteractions({ key, model, text, image, signal, fast }) {
   return out;
 }
 
-async function viaGenerateContent({ key, model, text, image, signal, fast }) {
-  const parts = [{ text: INSTRUCTIONS + '\n\n' + text }];
+async function viaGenerateContent({ key, model, prompt, schema, image, signal, fast }) {
+  const parts = [{ text: prompt }];
   if (image) parts.push({ inline_data: { mime_type: image.mime, data: image.data } });
-  const generationConfig = { responseMimeType: 'application/json', responseJsonSchema: FOOD_SCHEMA };
+  const generationConfig = { responseMimeType: 'application/json', responseJsonSchema: schema };
   if (fast) generationConfig.thinkingConfig = { thinkingLevel: 'minimal' };
   const j = await post(BASE + '/models/' + encodeURIComponent(model) + ':generateContent', key, {
     contents: [{ role: 'user', parts }], generationConfig,
@@ -110,21 +110,13 @@ async function callApi(name, o) {
   }
 }
 
-/**
- * @param {{key, model, api:'auto'|'interactions'|'generateContent', prefer?:string, fast?:boolean,
- *          text?:string, image?:{data:string(base64), mime:string}, signal?}} o
- *   prefer：自動模式下先試的 API（上次成功的那一種）
- * @returns {Promise<{items, note, raw, api, ms}>}
- */
-export async function analyzeMeal(o) {
+/** 共用：送出 prompt（可附圖），依 schema 取回 JSON。自動模式下先試上次成功的 API。 */
+async function callJSON(o, prompt, schema) {
   if (!o.key) throw new Error('請先在「設定」輸入 Gemini API key');
-  if (!o.model) throw new Error('請先在「設定」輸入模型名稱');
+  if (!o.model) throw new Error('請先在「設定」選擇模型');
   const t0 = Date.now();
-  const text = o.image
-    ? '請辨識這張照片中的餐點。' + (o.text ? '補充說明：' + o.text : '')
-    : '使用者描述的餐點：' + o.text;
   const api = o.api || 'auto';
-  const args = { ...o, text, fast: o.fast !== false };
+  const args = { ...o, prompt, schema, fast: o.fast !== false };
   let raw, used;
   if (api !== 'auto') { raw = await callApi(api, args); used = api; }
   else {
@@ -138,7 +130,54 @@ export async function analyzeMeal(o) {
   }
   let parsed;
   try { parsed = parseJSON(raw); } catch (e) { throw new Error('Gemini 回傳的不是有效 JSON'); }
-  return { ...clean(parsed), raw, api: used, ms: Date.now() - t0 };
+  return { parsed, raw, api: used, ms: Date.now() - t0 };
+}
+
+/**
+ * 辨識餐點
+ * @param {{key, model, api:'auto'|'interactions'|'generateContent', prefer?:string, fast?:boolean,
+ *          text?:string, image?:{data:string(base64), mime:string},
+ *          fix?:{was:string, text:string}, signal?}} o
+ *   prefer：自動模式下先試的 API（上次成功的那一種）
+ *   fix：修正重新辨識（原本辨識成什麼、使用者的修正說明），只回傳這一項
+ * @returns {Promise<{items, note, raw, api, ms}>}
+ */
+export async function analyzeMeal(o) {
+  let text;
+  if (o.fix) {
+    text = '先前辨識成「' + o.fix.was + '」，但使用者修正為：「' + o.fix.text + '」。'
+      + '請以使用者的修正為準，' + (o.image ? '參考照片中對應的那一項，' : '') + '只估算這一項食物（若修正內容包含多樣食物才分開列）。';
+  } else {
+    text = o.image ? '請辨識這張照片中的餐點。' + (o.text ? '補充說明：' + o.text : '') : '使用者描述的餐點：' + o.text;
+  }
+  const r = await callJSON(o, INSTRUCTIONS + '\n\n' + text, FOOD_SCHEMA);
+  return { ...clean(r.parsed), raw: r.raw, api: r.api, ms: r.ms };
+}
+
+export const ADVICE_SCHEMA = {
+  type: 'object',
+  properties: {
+    review: { type: 'string', description: '對這一餐的簡短回饋，1～2 句' },
+    next: { type: 'string', description: '下一餐可以考慮的方向，1～2 句，可舉 2～3 個台灣常見的食物例子' },
+    cheer: { type: 'string', description: '一句溫暖、鼓勵的話（心靈雞湯）' },
+  },
+  required: ['review', 'next', 'cheer'],
+};
+
+const ADVICE_RULES = `你是溫和的飲食記錄夥伴，用繁體中文（台灣用語）回覆。
+規則：
+1. 只提醒、不下指令：不要用「必須」「應該」「現在該…」這類命令句，改用「可以考慮」「或許」「如果方便的話」。
+2. 不批評、不製造罪惡感；吃多了也只是溫和地說明，並肯定記錄這件事本身。
+3. 不提供醫療、藥物或診斷建議，不提斷食時數的要求。
+4. 下一餐的建議以蛋白質、蔬菜與份量為主，參考今天還剩的點數與蛋白質缺口；如果今天點數已偏少（低於保底），溫和提醒別吃得太少。
+5. 每段簡短，不要列點、不要用 emoji 以外的符號標題。`;
+
+/** 這一餐的回饋、下一餐建議與一句鼓勵 */
+export async function mealAdvice(o, context) {
+  const prompt = ADVICE_RULES + '\n\n以下是資料（JSON）：\n' + JSON.stringify(context);
+  const r = await callJSON(o, prompt, ADVICE_SCHEMA);
+  const p = r.parsed || {};
+  return { review: String(p.review || ''), next: String(p.next || ''), cheer: String(p.cheer || ''), ms: r.ms, api: r.api };
 }
 
 /** 適合辨識餐點的預設模型清單（還沒向 Google 查詢時使用） */

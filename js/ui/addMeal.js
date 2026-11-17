@@ -5,6 +5,7 @@ import { itemCard, blankItem } from './mealEditor.js';
 import { foodPicker, itemFromFood, markUsed } from './library.js';
 import { itemTotals } from '../units.js';
 import { analyzeMeal, shrinkImage } from '../gemini.js';
+import { requestAdvice } from './advice.js';
 
 const r1 = x => Math.round(x * 10) / 10;
 
@@ -21,6 +22,7 @@ export function openAddMeal(o = {}) {
   let mode = o.mode || L.lastAddMode || 'photo';
   let thumb = editing ? (editing.find(m => m.thumb) || {}).thumb : undefined;
   let busy = null; // AbortController
+  let lastImage = null; // 本次拍的照片（只在面板開著時留在記憶體，供重新辨識）
 
   openSheet(sh => {
     sh.append(h('div.sheet-h', h('b', editing ? '編輯這一餐' : '記一餐'), h('button.link', { type: 'button', onclick: () => closeSheet() }, '關閉')));
@@ -82,6 +84,7 @@ export function openAddMeal(o = {}) {
           if (!f) return;
           try {
             const img = await shrinkImage(f);
+            lastImage = img;
             prev.textContent = ''; prev.append(h('img.preview', { src: img.dataUrl, alt: '餐點照片' }));
             if (L.keepThumbs) { try { thumb = (await shrinkImage(f, 200, 0.7, true)).dataUrl; } catch (e) { /* 縮圖失敗不影響 */ } }
             runAI({ image: img, text: hint.value.trim() });
@@ -114,10 +117,29 @@ export function openAddMeal(o = {}) {
         itemsBox.append(itemCard(it, {
           foldKey: 'meal-editor', onChange: updateTotal,
           onRemove: () => { items.splice(i, 1); drawItems(); },
+          onReanalyze: (text, btn) => reanalyze(i, text, btn),
           openEditor: it.source === 'manual' && !it.name,
         }));
       });
       updateTotal();
+    }
+
+    async function reanalyze(i, text, btn) {
+      if (!L.geminiKey) { toast('還沒設定 Gemini API key', true); return; }
+      const it = items[i];
+      const useImg = it.source === 'ai-photo' && lastImage;
+      btn.disabled = true; btn.textContent = '辨識中…';
+      try {
+        const res = await analyzeMeal({ key: L.geminiKey, model: L.geminiModel, api: L.geminiApi, prefer: L.geminiApiOk, fast: L.geminiFast !== false,
+          fix: { was: it.name || '未命名', text }, image: useImg ? lastImage : undefined });
+        if (!res.items.length) { toast('沒有辨識到食物，請換個說法', true); btn.disabled = false; btn.textContent = '重新辨識'; return; }
+        items.splice(i, 1, ...res.items.map(x => ({
+          name: x.name, per: x.per, servingGrams: x.servingGrams || 100, fistsPerServing: x.fistsPerServing,
+          unit: 'serving', qty: x.servings, slider: 1, source: useImg ? 'ai-photo' : 'ai-text', foodId: '', aiRaw: res.raw,
+        })));
+        drawItems();
+        toast('已重新辨識（' + (res.ms / 1000).toFixed(1) + ' 秒）');
+      } catch (e) { btn.disabled = false; btn.textContent = '重新辨識'; toast('重新辨識失敗：' + (e.message || e), true); }
     }
 
     function updateTotal() {
@@ -146,6 +168,7 @@ export function openAddMeal(o = {}) {
       S.meals.sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : 0);
       const ok = commit();
       closeSheet();
+      if (ok) requestAdvice(group);
       toast(ok ? (editing ? '已更新這一餐' : '已加入，' + fmtPts(items.reduce((a, it) => a + itemTotals(it).points, 0)) + ' 點') : '儲存失敗：本機空間不足', !ok);
     };
 

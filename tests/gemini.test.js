@@ -90,3 +90,12 @@ test('取得可用模型：只留文字用的 Gemini，lite 排前面', async ()
   };
   assert.deepEqual(await listModels('k'), ['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-4-argon-preview']);
 });
+
+test('修正重新辨識：prompt 帶入原本結果與使用者修正，並附照片', async () => {
+  let body;
+  globalThis.fetch = async (url, o) => { body = JSON.parse(o.body); return res(200, { steps: [{ type: 'model_output', content: [{ type: 'text', text: answer }] }] }); };
+  await analyzeMeal({ key: 'k', model: 'm', fix: { was: '炸豬排', text: '是雞胸肉，約 150 g' }, image: { data: 'AAA', mime: 'image/jpeg' } });
+  assert.match(body.input[0].text, /先前辨識成「炸豬排」/);
+  assert.match(body.input[0].text, /是雞胸肉，約 150 g/);
+  assert.equal(body.input[1].type, 'image');
+});

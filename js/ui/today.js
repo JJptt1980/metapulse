@@ -3,6 +3,7 @@ import { S, plan } from '../state.js';
 import { h, icon, fold, hm, WD, fmtPts } from './common.js';
 import { usage, localDate, addDays } from '../points.js';
 import { openAddMeal } from './addMeal.js';
+import { latestAdviceCard } from './advice.js';
 
 const r1 = x => Math.round(x * 10) / 10;
 
@@ -79,6 +80,8 @@ export function renderToday(root) {
   }
   top.append(h('button.pri.cta', { type: 'button', onclick: () => openAddMeal() }, icon('camera'), '記一餐'));
   root.append(top);
+  const adv = latestAdviceCard();
+  if (adv) root.append(adv);
 
   /* ---- 餐點列表：今天展開；前 6 天每天一行；更早依月份收合 ---- */
   const groups = groupMeals(S.meals);

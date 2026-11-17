@@ -2,6 +2,7 @@
 import { onChange } from './state.js';
 import { $, closeSheet, sheetOpen } from './ui/common.js';
 import { renderToday } from './ui/today.js';
+import { onAdviceState } from './ui/advice.js';
 import { renderSettings, showDisclaimerOnce, applyTheme } from './ui/settings.js';
 
 const APP_VERSION = window.APP_VERSION;
@@ -22,6 +23,7 @@ document.querySelectorAll('nav.tabs button').forEach(b => { b.onclick = () => { 
 
 /* 資料變動時只重畫「今日」，設定頁不重畫（避免打字時失去焦點） */
 onChange(() => { renderToday($('p-today')); });
+onAdviceState(() => { renderToday($('p-today')); });
 
 /* 跨日或從背景切回來時重畫 */
 let lastDay = new Date().toDateString();

@@ -128,6 +128,8 @@ function aiCard() {
   const api = h('select', h('option', { value: 'auto' }, '自動（先用 Interactions，失敗改 generateContent）'), h('option', { value: 'interactions' }, 'Interactions API'), h('option', { value: 'generateContent' }, 'generateContent'));
   api.value = L.geminiApi || 'auto';
   api.onchange = () => { L.geminiApi = api.value; commitLocal(); };
+  const adv = h('input', { type: 'checkbox', checked: L.mealAdvice !== false });
+  adv.onchange = () => { L.mealAdvice = adv.checked; commitLocal(); };
   const fast = h('input', { type: 'checkbox', checked: L.geminiFast !== false });
   fast.onchange = () => { L.geminiFast = fast.checked; commitLocal(); };
   const out = h('div.small', { style: { marginTop: '8px' } });
@@ -146,6 +148,7 @@ function aiCard() {
     h('label', 'API key'), h('div.row', h('div.grow', key), eye),
     h('label', '模型'), modelBox, modelMsg,
     h('label.row', { style: { color: 'var(--tx)', marginTop: '12px', fontSize: '15px' } }, fast, '速度優先（讓模型少思考）'),
+    h('label.row', { style: { color: 'var(--tx)', marginTop: '8px', fontSize: '15px' } }, adv, '記錄後給這一餐回饋與下一餐建議'),
     fold('ai-adv', h('span.small.mu', '進階：API 介面'), [h('label', 'API 介面'), api]),
     test, out,
     h('div.mu.tiny', { style: { marginTop: '8px', lineHeight: 1.6 } },

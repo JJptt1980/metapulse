@@ -81,6 +81,13 @@ export function itemCard(item, opts = {}) {
     drawUnits(); syncInputs(); refresh();
   };
 
+  if (opts.onReanalyze) {
+    const fixIn = h('input', { type: 'text', placeholder: '辨識不對？寫下正確內容，例如「是雞胸肉，約 150 g」' });
+    const fixBtn = h('button.ghost', { type: 'button', style: { whiteSpace: 'nowrap' } }, '重新辨識');
+    fixBtn.onclick = () => { const t = fixIn.value.trim(); if (!t) { fixIn.focus(); return; } opts.onReanalyze(t, fixBtn); };
+    fixIn.onkeydown = e => { if (e.key === 'Enter') fixBtn.click(); };
+    body.append(h('div.row', { style: { marginTop: '10px' } }, h('div.grow', fixIn), fixBtn));
+  }
   body.append(
     h('label', '份量'), unitBox, conv,
     h('div.row', { style: { marginTop: '10px' } }, qtyIn, unitTag), quick,

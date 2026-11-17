@@ -19,6 +19,23 @@ function dayTable(all, add) {
     h('div.tiny.mu', '存檔裡最新 7 天：'),
     ...dates.map(d => { const n = cnt(add, d); return h('div.small.num', { style: { display: 'flex', gap: '10px' } }, h('span', { style: { width: '52px' } }, +d.slice(5, 7) + '/' + +d.slice(8)), h('span', cnt(all, d) + ' 筆'), h('span', { style: { color: n ? 'var(--ac)' : 'var(--mu)' } }, n ? '新增 ' + n : '已存在')); }));
 }
+/** 按鈕進入「處理中」：轉圈＋文字、鎖住不能重按；回傳恢復用的函式 */
+function busy(btn, label) {
+  const old = [...btn.childNodes];
+  btn.disabled = true; btn.textContent = '';
+  btn.append(h('span.spin', { style: { width: '16px', height: '16px', marginRight: '6px' } }), label);
+  return () => { btn.disabled = false; btn.textContent = ''; btn.append(...old); };
+}
+/** 讓轉圈先畫出來，並至少顯示一下子（太快會像沒反應） */
+const tick = (ms = 350) => new Promise(r => requestAnimationFrame(() => setTimeout(r, ms)));
+/** 收起鍵盤、捲到結果的位置 */
+function reveal(el) {
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  setTimeout(() => { if (el.isConnected) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 250);
+}
+/* 還原會整頁重畫，結果先記下來，重畫後再顯示 */
+let lastResult = null;
+
 const sub = (t, first) => h('div.small', { style: { fontWeight: 650, margin: first ? '0 0 6px' : '18px 0 6px', paddingTop: first ? 0 : '14px', borderTop: first ? 0 : '1px solid var(--ln)' } }, t);
 
 const AI_PROMPT = '請把我貼上的健康記錄（體重、血壓、體組成、注射），轉換成下面格式的 JSON。只輸出 JSON，不要加任何說明文字。\n\n格式：\n{"entries":[{"date":"YYYY-MM-DD","time":"HH:MM","dose":劑量數字,"wt":體重數字,"sys":收縮壓,"dia":舒張壓,"pul":脈搏,"fat":體脂率,"mus":骨骼肌率,"vis":內臟脂肪等級,"bage":身體年齡,"bmr":基礎代謝,"site":"部位","note":"備註"}]}\n\n規則：\n1. date 必須是 YYYY-MM-DD。如果我的資料沒有年份，或日期有歧義（例如 03/04 可能是 3 月 4 日或 4 月 3 日），請先問我，不要自己猜。\n2. time 是量測時間（24 小時制 HH:MM），沒有就填空字串 ""。\n3. dose 是注射劑量（mg），wt 是體重（kg），sys／dia／pul 是收縮壓／舒張壓（mmHg）／脈搏（次/分），fat／mus 是體脂率／骨骼肌率（%），vis 是內臟脂肪等級，bage 是身體年齡（歲），bmr 是基礎代謝（kcal）。同一次量測的數值放同一筆；沒有的項目一律填 0。\n4. 如果體重單位是磅（lb），請換算成公斤，四捨五入到小數 1 位。\n5. site 只能是這七個之一：左腹、腹中、右腹、左大腿、右大腿、左上臂、右上臂。沒有部位或對不上就填空字串 ""，並把原本的部位文字寫進 note。\n6. 依日期由舊到新排序。\n7. 資料裡沒有的內容不要編造。\n\n以下是我的資料：\n（把你的記錄貼在這裡）';
@@ -42,18 +59,20 @@ function aiFold() {
 
 export function backupCard() {
   const sumEl = sumLine();
-  const out = h('div', { style: { marginTop: '10px' } });   // 匯入預覽與結果（兩區共用）
+  const outDrive = h('div');   // Google Drive 匯入的預覽與結果（放在按鈕正下方）
+  const outText = h('div');    // 文字／檔案的預覽與結果（放在按鈕正下方）
+  const say = (out, text, ok) => { out.textContent = ''; out.append(h(ok ? 'div.notice.ok' : 'div.notice', text)); reveal(out); };
 
   /* ---------- 同步版匯入：預覽與確認 ---------- */
-  const showSync = (parsed, source, savedAt) => {
+  const showSync = (out, parsed, source, savedAt) => {
     out.textContent = '';
     let pv;
-    try { pv = previewImport(parsed, S.entries, S.profile); } catch (e) { out.append(h('div.notice', e.message)); return; }
+    try { pv = previewImport(parsed, S.entries, S.profile); } catch (e) { say(out, e.message); return; }
     const pf = pv.profile, pl = [];
     if (pf.height) pl.push('身高 ' + pf.height + ' cm');
     if (pf.targetWeight) pl.push('目標體重 ' + pf.targetWeight + ' kg');
     if (pf.halfLife) pl.push('半衰期 ' + pf.halfLife + ' 小時');
-    out.append(h('div', { style: { background: 'var(--soft)', borderRadius: '12px', padding: '10px 12px', lineHeight: 1.8 } },
+    out.append(h('div', { style: { background: 'var(--soft)', borderRadius: '12px', padding: '10px 12px', lineHeight: 1.8, marginTop: '10px' } },
       h('div.small', h('b', '來源：'), source),
       h('div.small', '共 ' + pv.total + ' 筆' + (pv.from ? '（' + pv.from + ' ～ ' + pv.to + '）' : '')),
       h('div.small', '新增 ', h('b', pv.add.length), ' 筆・更新 ', h('b', pv.update.length), ' 筆・已存在略過 ', pv.dup, ' 筆' + (pv.bad ? '・日期格式錯誤略過 ' + pv.bad + ' 筆' : '')),
@@ -61,18 +80,20 @@ export function backupCard() {
       savedAt ? h('div.small', '同步版存到 Drive 的時間：' + fmtAt(savedAt)) : null,
       dayTable(parsed.entries, pv.add)));
     if (savedAt && Date.now() - savedAt > 12 * 3600000) out.append(h('div.notice', '同步版的雲端存檔已經 ' + Math.round((Date.now() - savedAt) / 3600000) + ' 小時沒更新。如果同步版裡有更新的記錄，請先在同步版連線 Google Drive 按一次同步，或改用下面的「貼上存檔文字」。'));
-    if (!pv.add.length && !pv.update.length && !pl.length) { out.append(h('div.notice.ok', '沒有新的資料，MetaPulse 已經是最新的。')); return; }
-    const go = h('button.pri.full', { type: 'button' }, '確認匯入');
-    go.onclick = () => {
+    if (!pv.add.length && !pv.update.length && !pl.length) { out.append(h('div.notice.ok', '沒有新的資料，MetaPulse 已經是最新的（存檔裡的記錄都已經有了）。')); reveal(out); return; }
+    const go = h('button.pri.full', { type: 'button', style: { marginTop: '8px' } }, '確認匯入');
+    go.onclick = async () => {
+      busy(go, '匯入中…'); await tick();
       const r = applyImport(S, pv);
       L.lastSyncImport = { at: Date.now(), added: r.added, updated: r.updated }; commitLocal();
       commit(); draw();
       out.textContent = '';
       out.append(h('div.notice.ok', '✓ 已新增 ' + r.added + ' 筆、更新 ' + r.updated + ' 筆。同步版的資料沒有被改動。'),
         h('div.notice', '移植完成前可以繼續用同步版記錄，之後再匯入一次即可（不會重複）。'));
-      toast('匯入完成');
+      toast('匯入完成'); reveal(out);
     };
     out.append(go);
+    reveal(out);
   };
 
   /* ---------- Google ---------- */
@@ -84,22 +105,23 @@ export function backupCard() {
   const acctBtns = h('div.grid2', { style: { marginTop: '8px' } }, sw, off);
   const fromDrive = h('button.ghost.full', { type: 'button', style: { marginTop: '8px' } }, '從 Google Drive 匯入同步版存檔');
   fromDrive.onclick = async () => {
-    if (!ready()) { out.textContent = ''; out.append(h('div.notice', '請先按上面的「連線 Google Drive」，登入和同步版同一個 Google 帳號，再按一次。')); return; }
-    fromDrive.disabled = true; out.textContent = ''; out.append(h('div.row.small.mu', h('span.spin'), '讀取中…'));
-    try { const r = await readSyncBackup(); showSync(parseSyncBackup(r.data), 'Google Drive', r.modifiedTime); }
-    catch (e) { out.textContent = ''; out.append(h('div.notice', e.message === 'auth' ? 'Google Drive 需要重新連線。' : '讀取失敗：' + e.message)); }
-    fromDrive.disabled = false;
+    if (!ready()) { say(outDrive, '請先按上面的「連線 Google Drive」，登入和同步版同一個 Google 帳號，再按一次。'); return; }
+    const done = busy(fromDrive, '讀取中…'); outDrive.textContent = '';
+    try { await tick(); const r = await readSyncBackup(); showSync(outDrive, parseSyncBackup(r.data), 'Google Drive', r.modifiedTime); }
+    catch (e) { say(outDrive, e.message === 'auth' ? 'Google Drive 需要重新連線。' : '讀取失敗：' + e.message); }
+    done();
   };
 
   /* ---------- 檢查各處最新日期 ---------- */
+  const outCheck = h('div', { style: { marginTop: '10px' } });
   const check = h('button.ghost.full', { type: 'button', style: { marginTop: '8px' } }, '檢查各處最新日期');
   check.onclick = async () => {
-    check.disabled = true; out.textContent = '';
+    check.disabled = true; outCheck.textContent = '';
     const box = h('div', { style: { background: 'var(--soft)', borderRadius: '12px', padding: '10px 12px', lineHeight: 1.8 } });
     const row = (title, ...lines) => box.append(h('div.small', { style: { marginTop: box.childNodes.length ? '6px' : 0 } }, h('b', title)), ...lines.filter(Boolean).map(t => h('div.small.num', t)));
     const lastMeal = ms => { let t = ''; for (const m of ms || []) if (m.at > t) t = m.at; return t ? '餐點 ' + fmtAt(new Date(t).getTime()) : ''; };
     row('這支手機', latestText(S.entries) || '沒有身體記錄', lastMeal(S.meals));
-    out.append(box);
+    outCheck.append(box); reveal(outCheck);
     if (!ready()) { box.append(h('div.small.mu', { style: { marginTop: '6px' } }, linked() ? 'Google Drive 要重新登入，才能檢查雲端。' : '還沒連線 Google Drive，只能看這支手機。')); check.disabled = false; return; }
     const wait = h('div.row.small.mu', h('span.spin'), '正在讀取 Google Drive…'); box.append(wait);
     try {
@@ -119,32 +141,39 @@ export function backupCard() {
   /* ---------- 其他：文字或檔案 ---------- */
   const ta = h('textarea', { rows: 3, placeholder: '貼上 MetaPulse 或同步版的存檔文字' });
   const file = h('input', { type: 'file', accept: '.json,.txt,application/json,text/plain' });
-  const msg = h('div.mu.small', { style: { marginTop: '6px' } });
-  let confirmRestore = 0;
   const handle = (text, source) => {
-    msg.textContent = ''; out.textContent = '';
+    outText.textContent = '';
     let p;
-    try { p = JSON.parse(String(text).replace(/```(json)?/g, '').trim()); } catch (e) { msg.textContent = '看不懂這段內容，請確認貼上的是完整的存檔文字（從 { 開頭到 } 結尾）。'; return; }
+    try { p = JSON.parse(String(text).replace(/```(json)?/g, '').trim()); } catch (e) { say(outText, '看不懂這段內容，沒有匯入任何資料。請確認貼上的是完整的存檔文字（從 { 開頭到 } 結尾，中間沒有被截斷）。'); return; }
     if (p && Array.isArray(p.meals)) {             // MetaPulse 自己的備份 → 還原（取代全部）
-      if (Date.now() - confirmRestore > 5000) {
-        confirmRestore = Date.now();
-        msg.textContent = '這是 MetaPulse 的備份（' + (p.entries || []).length + ' 筆身體記錄、' + p.meals.length + ' 筆餐點）。還原會取代目前所有資料，5 秒內再按一次確認。';
-        return;
-      }
-      confirmRestore = 0;
-      replaceState(normalizeState(p));
-      msg.textContent = '已還原 ' + S.entries.length + ' 筆身體記錄、' + S.meals.length + ' 筆餐點。'; toast('已還原');
+      const ok = h('button.danger.full', { type: 'button', style: { marginTop: '8px' } }, '確認還原（取代全部資料）');
+      const no = h('button.ghost.full', { type: 'button', style: { marginTop: '6px' }, onclick: () => { outText.textContent = ''; } }, '取消');
+      ok.onclick = async () => {
+        no.disabled = true; busy(ok, '還原中…'); await tick(500);
+        lastResult = { at: Date.now(), text: '✓ 已還原 ' + (p.entries || []).length + ' 筆身體記錄、' + p.meals.length + ' 筆餐點。' };
+        replaceState(normalizeState(p));     // 會整頁重畫，結果由 lastResult 顯示
+        toast('已還原');
+      };
+      outText.append(h('div.notice', '這是 MetaPulse 的備份（' + (p.entries || []).length + ' 筆身體記錄、' + p.meals.length + ' 筆餐點）。還原會用它取代目前所有資料。'), ok, no);
+      reveal(outText);
       return;
     }
-    try { showSync(parseSyncBackup(p), source); }   // 同步版備份 → 匯入預覽（不覆蓋）
-    catch (e) { msg.textContent = e.message; }
+    try { showSync(outText, parseSyncBackup(p), source); }   // 同步版備份 → 匯入預覽（不覆蓋）
+    catch (e) { say(outText, e.message); }
+  };
+  const run = async (btn, text, source) => {
+    const done = busy(btn, '讀取中…'); outText.textContent = '';
+    await tick();
+    try { handle(text, source); } catch (e) { say(outText, '發生錯誤：' + e.message); }
+    done();
   };
   file.onchange = async () => {
     const f = file.files && file.files[0]; file.value = ''; if (!f) return;
-    try { const t = await f.text(); ta.value = t; handle(t, '檔案「' + f.name + '」'); } catch (e) { msg.textContent = '讀取檔案失敗。'; }
+    try { const t = await f.text(); ta.value = t; await run(use, t, '檔案「' + f.name + '」'); } catch (e) { say(outText, '讀取檔案失敗。'); }
   };
-  const gen = h('button.ghost', { type: 'button', onclick: () => { ta.value = JSON.stringify(S); ta.select(); L.lastBackup = Date.now(); commitLocal(); draw(); msg.textContent = '已產生（' + S.entries.length + ' 筆身體記錄、' + S.meals.length + ' 筆餐點），請全選、複製後另外保存。'; } }, '產生存檔文字');
-  const use = h('button.ghost', { type: 'button', onclick: () => { if (ta.value.trim()) handle(ta.value, '貼上的文字'); else ta.focus(); } }, '匯入或還原');
+  const gen = h('button.ghost', { type: 'button', onclick: () => { ta.value = JSON.stringify(S); ta.select(); L.lastBackup = Date.now(); commitLocal(); draw(); say(outText, '已產生（' + S.entries.length + ' 筆身體記錄、' + S.meals.length + ' 筆餐點），請全選、複製後另外保存。', true); } }, '產生存檔文字');
+  const use = h('button.ghost', { type: 'button' }, '匯入或還原');
+  use.onclick = () => { if (ta.value.trim()) run(use, ta.value, '貼上的文字'); else { say(outText, '框裡是空的，請先貼上存檔文字。'); ta.focus(); } };
 
   function draw() {
     const em = driveEmail();
@@ -158,16 +187,16 @@ export function backupCard() {
   draw();
 
   const body = [
-    sub('Google', true), acct, main, acctBtns, check,
+    sub('Google', true), acct, main, acctBtns, check, outCheck,
     h('div.mu.tiny', { style: { marginTop: '8px', lineHeight: 1.6 } }, 'MetaPulse 的存檔會放在你 Google Drive 裡一個看不到的專用資料夾，只有這個 app 能讀寫，別人（包括作者）都看不到。手機和雲端的存檔會合併在一起，同一筆記錄以最後修改的為準，不會整份互相蓋掉。'),
-    fromDrive,
+    fromDrive, outDrive,
     h('div.mu.tiny', { style: { marginTop: '8px', lineHeight: 1.6 } }, '「同步版」是你之前用的「注射與體重記錄 同步版」app。按上面的按鈕，可以把它存在 Google Drive 的記錄搬過來；只會讀取，不會改動同步版，可以重複按，不會重複加入。'),
     sub('其他：用文字或檔案存檔、搬資料'),
-    ta, h('div.grid2', { style: { marginTop: '8px' } }, gen, use),
-    h('label', '或選擇存檔檔案（.json 或 .txt）'), file, msg,
+    ta, h('div.grid2', { style: { marginTop: '8px' } }, gen, use), outText,
+    h('label', '或選擇存檔檔案（.json 或 .txt）'), file,
     h('div.mu.tiny', { style: { marginTop: '6px', lineHeight: 1.6 } }, '「產生存檔文字」會把全部記錄變成一段文字，可以複製貼到記事本或傳給自己保存。貼上或選擇檔案後，app 會自動判斷：MetaPulse 的存檔會「還原」（用它取代現在全部的資料，要再按一次確認）；同步版的存檔會「匯入」（只加入新的記錄，可以重複做）。'),
     aiFold(),
-    out,
   ];
+  if (lastResult && Date.now() - lastResult.at < 15000) { say(outText, lastResult.text, true); lastResult = null; }
   return section('backup', '備份與匯入', sumEl, body, !linked() || !S.entries.length);
 }

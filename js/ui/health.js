@@ -12,7 +12,7 @@ export function healthCard() {
   const native = isNative() && !!healthPlugin();
   const drawSum = () => {
     const x = L.lastHC;
-    sumEl.textContent = !native ? '要在 Maple 手機 app（APK）裡才能用'
+    sumEl.textContent = !native ? '只能在 Maple app 使用'
       : x ? '上次同步：' + new Date(x.at).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + '・新增 ' + x.added + ' 筆' : '還沒同步過';
   };
   drawSum();

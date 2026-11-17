@@ -114,7 +114,7 @@ export function backupCard() {
 
   const body = [
     sub('Google', true), acct, main, acctBtns,
-    h('div.mu.tiny', { style: { marginTop: '8px', lineHeight: 1.6 } }, 'MetaPulse 的存檔會放在你 Google Drive 裡一個看不到的專用資料夾，只有這個 app 能讀寫，別人（包括作者）都看不到。手機和雲端的存檔，以比較新的那份為準。'),
+    h('div.mu.tiny', { style: { marginTop: '8px', lineHeight: 1.6 } }, 'MetaPulse 的存檔會放在你 Google Drive 裡一個看不到的專用資料夾，只有這個 app 能讀寫，別人（包括作者）都看不到。手機和雲端的存檔會合併在一起，同一筆記錄以最後修改的為準，不會整份互相蓋掉。'),
     fromDrive,
     h('div.mu.tiny', { style: { marginTop: '8px', lineHeight: 1.6 } }, '「同步版」是你之前用的「注射與體重記錄 同步版」app。按上面的按鈕，可以把它存在 Google Drive 的記錄搬過來；只會讀取，不會改動同步版，可以重複按，不會重複加入。'),
     sub('其他：用文字或檔案存檔、搬資料'),

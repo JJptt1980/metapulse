@@ -11,6 +11,7 @@ import { h, toast } from './ui/common.js';
 import { initDrive, onDrive, driveStatus, driveEmail, connect, linked, ready } from './drive.js';
 import { scheduleSoon } from './notify.js';
 import { preloadSounds } from './sounds.js';
+import { updateWidgetSoon } from './widget.js';
 import { isNative } from './health.js';
 if (isNative()) document.documentElement.classList.add('native');   // 保險：頁面開頭沒偵測到 app 時補上（狀態列留白）
 
@@ -43,6 +44,7 @@ onChange(ev => {
   if (tab === 'set' && ev && ev.replaced) renderSettings($('p-set'));
   if (!ev || !ev.remote) askBackupSoon();
   scheduleSoon();                       // 服藥、注射通知（只有 Maple app）
+  updateWidgetSoon();                   // 桌面小工具（只有 Maple app）
 });
 
 /* ---------- Google Drive 狀態列、提示 ---------- */
@@ -101,6 +103,8 @@ show('today');
 initDrive();
 scheduleSoon();
 preloadSounds();
+updateWidgetSoon();
+document.addEventListener('visibilitychange', () => { if (document.hidden) updateWidgetSoon(); });
 
 /* 斷食計時：今日頁每分鐘更新一次 */
 setInterval(() => { if (tab === 'today' && !sheetOpen() && !document.hidden) renderToday($('p-today')); }, 60000);

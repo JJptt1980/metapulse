@@ -6,7 +6,7 @@ import { bmrMifflin, ageFrom } from '../points.js';
 import { libraryManager } from './library.js';
 import { itemCard } from './mealEditor.js';
 import { analyzeMeal, listModels, DEFAULT_MODELS } from '../gemini.js';
-import { driveCard, backupTextCard, syncImportCard } from './backup.js';
+import { backupCard } from './backup.js';
 import { healthCard } from './health.js';
 
 const r1 = x => Math.round(x * 10) / 10;
@@ -188,9 +188,9 @@ function prefsCard() {
 export function renderSettings(root) {
   root.textContent = '';
   sectionBudget.left = 1;
-  root.append(healthCard(), syncImportCard(), driveCard(), profileCard(), aiCard(),
+  root.append(healthCard(), backupCard(), profileCard(), aiCard(),
     (() => { const sl = sumLine(); sl.textContent = S.foodLibrary.length ? S.foodLibrary.length + ' 項' : '還沒有常用食物'; return section('lib', '常用食物庫', sl, [libraryManager(itemCard)]); })(),
-    prefsCard(), backupTextCard(),
+    prefsCard(),
     section('legal', '關於本 app 與免責聲明', null, [legal()]),
     h('p.mu.small', { style: { textAlign: 'center', margin: '18px 0 6px' } }, '覺得好用？', h('a', { href: 'https://ko-fi.com/killnopig', target: '_blank', rel: 'noopener', style: { color: 'var(--ac)' } }, '請我喝杯咖啡'), '（自願，不影響任何功能）'));
 }

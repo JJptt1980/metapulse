@@ -2,13 +2,14 @@
  * Chart.js 4.4.1 在第一次開啟圖表頁時才從 cdnjs 載入。圖表卡片可收合，收起來的不畫。 */
 import { S, L, commitLocal, plan } from '../state.js';
 import { h, fold, pills, toast, tip } from './common.js';
-import { buildSummary, dailyFood, dailyFastDetail } from '../summary.js';
+import { buildSummary, dailyFood, dailyFastDetail, eatingWindows, macroSplit } from '../summary.js';
 import { capPlugin } from '../health.js';
 import { localDate } from '../points.js';
 import { targetHours } from '../fasting.js';
-import { sortEntries, onBoard, dn, fromDn, md, wdOf } from '../records.js';
+import { sortEntries, onBoard, dn, fromDn, md, wdOf, medAdherence } from '../records.js';
+import { ledgerSeries, activityByDay, allActivity } from '../ledger.js';
 import { longTermStatusCard, leanParts, longTermStatus, leanStatus } from './fasting.js';
-import { leanSummary } from '../longterm.js';
+import { leanSummary, longTermRows } from '../longterm.js';
 
 const CHART_URL = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';
 let loading = null;
@@ -70,7 +71,7 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
   const leg = () => ({ labels: { color: tx, boxWidth: 12, usePointStyle: true, pointStyleWidth: 18,
     generateLabels: chart => Chart.defaults.plugins.legend.labels.generateLabels(chart).map(it => {
       const ds = chart.data.datasets[it.datasetIndex] || {}, dashed = ds.borderDash && ds.borderDash.length;
-      return Object.assign(it, dashed ? { pointStyle: 'line', lineDash: [4, 3], lineWidth: 3 } : { pointStyle: 'rect', lineDash: [] });
+      return Object.assign(it, dashed ? { pointStyle: 'line', lineDash: [4, 3], lineWidth: 3 } : { pointStyle: 'rect', lineDash: [] }, ds.legendColor ? { fillStyle: ds.legendColor, strokeStyle: ds.legendColor } : {});
     }) } });
   const ln3 = (label, data, color, extra) => Object.assign({ label, data, borderColor: color, backgroundColor: color, tension: 0.25, pointRadius: data.length > 80 ? 1.5 : 3, spanGaps: true }, extra || {});
   // 橫軸照實際天數排：從第一天到最後一天每天一格，沒量的日子留空（線直接連過去）
@@ -237,6 +238,102 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
     const parts = [mini('身體年齡（歲）', bm, e => e.bage, c3, 0), mini('基礎代謝（大卡）', bm, e => e.bmr, c4, 0)].filter(Boolean);
     if (parts.length) sp.push({ id: 'bm', title: '身體年齡與基礎代謝', dates: parts[0].dates, parts, cfg: parts[0].cfg });
   }
+  /* ---------- 飲食・運動・用藥（只在畫面上，放在同一個大區塊裡）；今天還沒過完不畫 ---------- */
+  const yday = fromDn(dn(today) - 1), P2 = S.prefs || {};
+  const from = (keys) => { const k = keys.filter(d => (!cut || d >= cut) && d <= yday).sort(); return k.length ? k : null; };
+  const sopt = (y, extra) => ({ maintainAspectRatio: false, plugins: { legend: leg() }, scales: Object.assign({ x: { grid: grid(), ticks: tk(), stacked: !!(y && y.stacked) }, y: Object.assign({ grid: grid() }, y || {}) }, extra || {}) });
+  const p1 = x => (Math.round(x * 10) / 10).toString();
+  const hhmm = t => { const x = new Date(t); return String(x.getHours()).padStart(2, '0') + ':' + String(x.getMinutes()).padStart(2, '0'); };
+  // 1. 點數存摺
+  const lk = from([...new Set(S.meals.map(m => localDate(m.at)))]);
+  if (Pn.ok && lk) {
+    const rows = ledgerSeries(S.meals, allActivity(S), Pn.dailyPoints, lk[0], yday, P2.weekStart || 'roll'), ax = rows.map(r => r.date);
+    const left = rows.map(r => (r.logged ? +r.left.toFixed(1) : null));
+    sp.push({
+      id: 'ledger', group: 'more', screenOnly: true, title: '點數存摺', dates: ax,
+      note: '長條是每天剩下的點數（每日點數＋運動加回−吃掉的），綠色是有剩、橘色是超支。粗線是存摺餘額，算法跟「飲食運動」頁一樣，照設定的「' + ({ roll: '最近 7 天', sun: '每週日開始', mon: '每週一開始' }[P2.weekStart || 'roll']) + '」分期。過去每一天都用現在的每日點數 ' + Pn.dailyPoints + ' 點估算；沒記錄的日子不畫長條，存摺照今日頁的算法當作沒吃。',
+      extra: i => { const r = rows[i]; return r.logged ? ['額度 ' + p1(r.budget) + '・吃了 ' + p1(r.eaten) + (r.refund ? '・運動加回 ' + p1(r.refund) : '')] : ['這天沒記錄']; },
+      cfg: { data: { labels: ax.map(md), datasets: [
+        { type: 'bar', label: '當天剩下', data: left, backgroundColor: c => (c.raw != null && c.raw < 0 ? rc : wc), legendColor: wc, order: 2 },
+        { type: 'line', label: '存摺餘額', data: rows.map(r => r.balance), borderColor: c3, backgroundColor: c3, borderWidth: 2.5, pointRadius: 0, tension: 0.2, order: 1 }] },
+      options: sopt() },
+    });
+  }
+  // 2. 進食時間窗
+  const ew = eatingWindows(S.meals), ek = from(Object.keys(ew));
+  if (ek) {
+    const ax = span(ek), hr = t => { const x = new Date(t); return +(x.getHours() + x.getMinutes() / 60).toFixed(2); };
+    const win = ax.map(d => (ew[d] ? [hr(ew[d].start), Math.max(hr(ew[d].end), hr(ew[d].start) + 0.25)] : null));
+    const hrs = ax.filter(d => ew[d] && ew[d].meals > 1).map(d => ew[d].hours);
+    sp.push({
+      id: 'window', group: 'more', screenOnly: true, title: '進食時間窗', dates: ax,
+      sub: hrs.length ? '平均 ' + p1(hrs.reduce((a, b) => a + b, 0) / hrs.length) + ' 小時' : '',
+      note: '每天一根：從第一道吃的到最後一道吃的時間，越上面越早。過了半夜吃的算到隔天；漏記一餐時會不準。',
+      label: () => '吃東西的時段',
+      extra: i => { const x = ew[ax[i]]; return x ? [hhmm(x.start) + ' → ' + hhmm(x.end) + '，共 ' + p1(x.hours) + ' 小時、' + x.meals + ' 餐'] : ['這天沒記錄']; },
+      cfg: { type: 'bar', data: { labels: ax.map(md), datasets: [{ label: '吃東西的時段', data: win, backgroundColor: wc, borderRadius: 3 }] },
+        options: sopt({ reverse: true, min: 0, max: 24, ticks: { stepSize: 6, callback: v => v + ':00' } }) },
+    });
+  }
+  // 3. 三大營養素比例
+  const ms = macroSplit(food), mk = from(Object.keys(ms));
+  if (mk) {
+    const ax = span(mk), g = k => ax.map(d => (ms[d] ? ms[d][k] : null));
+    sp.push({
+      id: 'macro', group: 'more', screenOnly: true, title: '三大營養素比例', dates: ax,
+      note: '每天的熱量裡，蛋白質、碳水、脂肪各佔多少（估算：蛋白質和碳水每克 4 大卡、脂肪每克 9 大卡）。數字來自 AI 辨識或食物庫，只是大概。',
+      label: it => it.dataset.label + ' ' + it.raw + '%',
+      extra: i => { const x = ms[ax[i]]; return x ? ['蛋白質 ' + Math.round(x.protein) + ' g・碳水 ' + Math.round(x.carb) + ' g・脂肪 ' + Math.round(x.fat) + ' g'] : ['這天沒記錄']; },
+      cfg: { type: 'bar', data: { labels: ax.map(md), datasets: [
+        { label: '蛋白質', data: g('p'), backgroundColor: wc }, { label: '碳水', data: g('c'), backgroundColor: c4 }, { label: '脂肪', data: g('f'), backgroundColor: rc }] },
+      options: sopt({ stacked: true, min: 0, max: 100, ticks: { stepSize: 25, callback: v => v + '%' } }) },
+    });
+  }
+  // 4. 運動消耗
+  const ab = activityByDay(S.activity, S.exercise), ak = from(Object.keys(ab).filter(d => ab[d].hc + ab[d].manual > 0));
+  if (ak) {
+    const ax = span(ak), g = k => ax.map(d => (ab[d] && ab[d][k] ? Math.round(ab[d][k]) : null));
+    sp.push({
+      id: 'move', group: 'more', screenOnly: true, title: '運動消耗', dates: ax,
+      note: '每天運動消耗的熱量（估算）。「手機／手錶」是 Health Connect 讀到的，「自己記的」是在「飲食運動」頁手動加的。手錶通常會高估，所以加回的點數只算 75%。',
+      extra: i => (ab[ax[i]] ? ['加回 ' + p1(ab[ax[i]].refund) + ' 點'] : ['這天沒有運動記錄']),
+      cfg: { type: 'bar', data: { labels: ax.map(md), datasets: [{ label: '手機／手錶', data: g('hc'), backgroundColor: wc }, { label: '自己記的', data: g('manual'), backgroundColor: c3 }] },
+        options: sopt({ stacked: true, beginAtZero: true }) },
+    });
+  }
+  // 5. 用藥準時率（每週）
+  const medFirst = [...(S.medLog || []).map(x => x.date), ...dsAll.map(e => e.date), ...(P2.meds || []).map(m => m && m.since).filter(Boolean)].sort()[0];
+  const wks = medFirst ? medAdherence(P2.meds, S.medLog, S.entries, cut && cut > medFirst ? cut : medFirst, yday, P2.weekStart === 'sun' ? 'sun' : 'mon') : [];
+  if (wks.length) {
+    const hasMed = wks.some(w => w.need), hasDose = wks.some(w => w.doses.length);
+    const pct = (a, b) => (b ? Math.round(a / b * 100) : null);
+    const ds5 = [];
+    if (hasMed) ds5.push({ type: 'bar', label: '吃藥', data: wks.map(w => pct(w.taken, w.need)), backgroundColor: fade(wc, 0.55), order: 3 },
+      { type: 'line', label: '準時（±1 小時）', data: wks.map(w => pct(w.onTime, w.need)), borderColor: c3, backgroundColor: c3, pointRadius: 3, spanGaps: true, clip: false, order: 1 });
+    if (hasDose) ds5.push({ type: 'line', label: '打針準時', data: wks.map(w => { const d = w.doses.filter(x => x.ok !== null); return d.length ? pct(d.filter(x => x.ok).length, d.length) : null; }), borderColor: rc, backgroundColor: rc, showLine: false, pointRadius: 5, pointStyle: 'rectRot', clip: false, order: 0 });
+    sp.push({
+      id: 'meds', group: 'more', screenOnly: true, title: '用藥準時率', dates: wks.map(w => w.start),
+      note: '每週一格（從週' + (P2.weekStart === 'sun' ? '日' : '一') + '開始）。長條：該吃的藥有記錄吃了幾成；線：在設定時間前後 1 小時內記錄的比例。打針：和上一針隔 6～8 天算準時。這是記錄的統計，漏按也會算成沒吃。',
+      label: it => it.dataset.label + ' ' + it.raw + '%',
+      extra: i => { const w = wks[i], x = []; if (w.need) x.push('吃了 ' + w.taken + '／' + w.need + ' 次，準時 ' + w.onTime + ' 次'); for (const d of w.doses) x.push('打針 ' + md(d.date) + (d.gap ? '，隔 ' + d.gap + ' 天' : '')); return x; },
+      cfg: { data: { labels: wks.map(w => md(w.start) + ' 週'), datasets: ds5 }, options: sopt({ min: 0, max: 100, ticks: { stepSize: 25, callback: v => v + '%' } }) },
+    });
+  }
+  // 長期攝取指數（只在畫面上，截圖已有文字）：淡點是每天比例，粗線是長期指數
+  const ltr = longTermRows(longTermStatus().lt.series, cut);
+  if (ltr.dates.length) {
+    const r2 = a => a.map(v => (v == null ? null : +v.toFixed(2)));
+    sp.push({
+      id: 'lt', title: '長期攝取指數', dates: ltr.dates, screenOnly: true,
+      refs: [{ y: 1, label: '1.0' }, { y: 0.8, label: '0.8' }],
+      note: '粗線是長期指數，淡點是每天吃進的熱量 ÷ 基礎代謝。虛線 1.0＝平均每天剛好吃到基礎代謝；0.8 以下代表熱量持續偏低。剛開始記錄的前幾週線會跳比較大，記滿 21 天後比較準。沒記錄或沒記完整的日子不畫點。',
+      extra: i => (ltr.kcal[i] == null ? ['這天沒記錄或沒記完整'] : ['吃了約 ' + Math.round(ltr.kcal[i]) + ' 大卡']),
+      cfg: {
+        type: 'line', data: { labels: ltr.dates.map(md), datasets: [dots('每天', r2(ltr.ratio), c3), trend('長期指數', r2(ltr.index), wc)] },
+        options: { maintainAspectRatio: false, plugins: { legend: leg() }, scales: { x: { grid: grid(), ticks: tk() }, y: { grid: grid(), suggestedMin: 0.6, suggestedMax: 1.4 } } },
+      },
+    });
+  }
   for (const x of sp) { x.cfg.plugins = [refPlugin(x)]; for (const pt of x.parts || []) pt.cfg.plugins = []; }
   return sp;
 }
@@ -250,7 +347,7 @@ export function addHover(sp, pal) {
   o.plugins.tooltip = {
     mode: 'index', intersect: false, padding: 10, titleFont: { size: 13 }, bodyFont: { size: 13 }, footerFont: { size: 12, weight: 'normal' },
     filter: it => !/^(過重|肥胖) /.test(it.dataset.label || ''),
-    callbacks: { title: it => (it.length && sp.dates ? fullDate(sp.dates[it[0].dataIndex]) : ''), footer: it => (it.length && sp.extra ? sp.extra(it[0].dataIndex) : []) },
+    callbacks: { ...(sp.label ? { label: sp.label } : {}), title: it => (it.length && sp.dates ? fullDate(sp.dates[it[0].dataIndex]) : ''), footer: it => (it.length && sp.extra ? sp.extra(it[0].dataIndex) : []) },
   };
   sp.cfg.plugins = (sp.cfg.plugins || []).concat(crosshair(pal.mu));
 }
@@ -262,7 +359,7 @@ const LIGHT = { tx: '#14212b', mu: '#5d6b78', ln: '#d5dde4', wc: '#0f766e', dc: 
 /** 所有圖表合成一張高解析度圖片（淺色底，不受深色模式影響） */
 async function exportCharts(range, bpv) {
   await loadChart();
-  const specs = chartSpecs(LIGHT, range, bpv);
+  const specs = chartSpecs(LIGHT, range, bpv).filter(x => !x.screenOnly);
   if (!specs.length) throw new Error('目前沒有可以畫的圖表。');
   const font = '"Noto Sans TC",system-ui,sans-serif';
   // 最後一格放文字摘要（長期攝取指數、淨體重、斷食），兩欄剛好排滿
@@ -418,8 +515,15 @@ export async function renderCharts(root, keep = false) {
 async function drawCharts(root) {
   live.forEach(c => c && c.destroy()); live = [];
   root.textContent = '';
-  const any = S.entries.some(e => e.wt > 0 || e.dose > 0 || e.sys > 0 || e.fat > 0 || e.mus > 0 || e.vis > 0 || e.bage > 0 || e.bmr > 0);
-  if (!any) { root.append(h('div.card', h('div.empty', '還沒有可以畫圖的資料。到「身體」新增，或到「設定」→「備份與匯入」把同步版的記錄搬過來。'))); root.append(longTermStatusCard()); return; }
+  const any = S.entries.some(e => e.wt > 0 || e.dose > 0 || e.sys > 0 || e.fat > 0 || e.mus > 0 || e.vis > 0 || e.bage > 0 || e.bmr > 0)
+    || S.meals.length || (S.exercise || []).length || (S.activity || []).length || (S.medLog || []).length;
+  if (!any) {
+    root.append(h('div.card', h('div.empty', '還沒有可以畫圖的資料。到「身體」新增，或到「設定」→「備份與匯入」把同步版的記錄搬過來。')));
+    if (!longTermStatus().lt.series.length) { root.append(longTermStatusCard()); return; }
+    try { await loadChart(); } catch (e) { root.append(longTermStatusCard()); return; }
+    chartDefaults();
+    return root.append(ltCard(chartSpecs(palette(), 'all').find(x => x.id === 'lt')));
+  }
   const range = L.chartRange || 'all', bpv = L.chartBp || 'all';
   root.append(h('div.card', h('div.row.between', h('b.small', '範圍'), pills([['30', '近 30 天'], ['90', '近 90 天'], ['all', '全部']], range, v => { L.chartRange = v; commitLocal(); renderCharts(root, true); })),
     ));
@@ -430,11 +534,12 @@ async function drawCharts(root) {
   }
   wait.remove();
   root.append(aiCard(range, bpv));
-  const pal = palette();
-  Chart.defaults.color = pal.mu;
-  Chart.defaults.font.family = 'system-ui,-apple-system,"Noto Sans TC",sans-serif';
+  const pal = chartDefaults();
+  let ltSp = null;
+  const more = [], moreDraw = [], moreD = fold('chart-more', h('div.grow', h('h2', { style: { margin: 0 } }, '飲食・運動・用藥'), h('div.mu.small.one', { style: { marginTop: '2px' } }, '點數存摺、進食時間、營養素、運動、用藥')), more);
   for (const sp of chartSpecs(pal, range, bpv)) {
     if (sp.exportOnly) continue;
+    if (sp.id === 'lt') { ltSp = sp; continue; }
     addHover(sp, pal);
     const cv = h('canvas', { style: { touchAction: 'pan-y' } });
     const body = [];
@@ -446,19 +551,43 @@ async function drawCharts(root) {
       return [c0, pt.cfg];
     });
     if (sp.note) body.push(tip(sp.note));
-    let head = h('h2', { style: { margin: 0 } }, sp.title);
+    const inner = sp.group === 'more';
+    let head = inner ? h('b', sp.title) : h('h2', { style: { margin: 0 } }, sp.title);
     if (sp.id === 'lean') { const lp = leanParts(); head = h('div.grow', head, lp.sum); body.push(h('div', { style: { marginTop: '10px' } }, lp.body)); }
     else if (sp.sub) head = h('div.grow', head, h('div.mu.small.one', { style: { marginTop: '2px' } }, sp.sub));
     const d = fold('chart-' + sp.id, head, body, { open: !!OPEN_DEFAULT[sp.id] });
     let chart = null;
     const draw = () => {
-      if (chart || !d.open) return;
+      if (chart || !d.open || (inner && !moreD.open)) return;
       try { for (const [c0, cfg] of cvs) { chart = new Chart(c0, cfg); live.push(chart); } }
       catch (e) { body[body.length - 1].after?.(h('div.notice', '圖表產生失敗：' + (e.message || e))); }
     };
     d.addEventListener('toggle', draw);
+    if (inner) { moreD.addEventListener('toggle', draw); moreDraw.push(draw); more.push(h('div', { style: { borderTop: '1px solid var(--ln)', marginTop: '10px', paddingTop: '10px' } }, d)); continue; }
     root.append(h('div.card', d));
     draw();
   }
-  root.append(longTermStatusCard());
+  if (more.length) { moreD.append(...more); root.append(h('div.card', moreD)); moreDraw.forEach(f => f()); }
+  root.append(ltCard(ltSp));
+}
+
+function chartDefaults() {
+  const pal = palette();
+  Chart.defaults.color = pal.mu;
+  Chart.defaults.font.family = 'system-ui,-apple-system,"Noto Sans TC",sans-serif';
+  return pal;
+}
+
+/** 長期攝取指數卡：圖在上、現況說明在下；摺疊打開時才畫 */
+function ltCard(sp) {
+  if (!sp) return longTermStatusCard();
+  addHover(sp, palette());
+  const cv = h('canvas', { style: { touchAction: 'pan-y' } });
+  const card = longTermStatusCard([h('div', { style: { position: 'relative', height: '250px', marginTop: '10px' } }, cv)], '圖：' + sp.note);
+  const d = card.querySelector('details');
+  let chart = null;
+  const draw = () => { if (chart || !d.open) return; try { chart = new Chart(cv, sp.cfg); live.push(chart); } catch (e) { cv.after(h('div.notice', '圖表產生失敗：' + (e.message || e))); } };
+  d.addEventListener('toggle', draw);
+  requestAnimationFrame(draw);                    // 等卡片放進畫面再畫，才量得到大小
+  return card;
 }

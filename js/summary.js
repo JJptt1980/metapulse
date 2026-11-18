@@ -240,3 +240,29 @@ export function buildSummary(S, P, today, withPrompt = true) {
   L.push('※ 以上資料由使用者自行記錄或匯入；殘留量、BMI、熱量與營養素都是估計，不是診斷依據。');
   return L.join('\n');
 }
+
+/** 每天的進食時間窗：第一道到最後一道的時間（依吃的那天歸類）：{ 'YYYY-MM-DD': {start, end, hours, meals} } */
+export function eatingWindows(meals) {
+  const o = {}, groups = {};
+  for (const m of meals || []) {
+    const t = new Date(m.at).getTime(); if (!Number.isFinite(t)) continue;
+    const d = localDate(m.at), x = o[d] || (o[d] = { start: t, end: t, hours: 0, meals: 0 });
+    if (t < x.start) x.start = t; if (t > x.end) x.end = t;
+    const g = d + '|' + (m.group || m.id);
+    if (!groups[g]) { groups[g] = 1; x.meals++; }
+  }
+  for (const d in o) o[d].hours = (o[d].end - o[d].start) / H;
+  return o;
+}
+
+/** 三大營養素佔熱量的比例（估算：蛋白質、碳水每克 4 大卡，脂肪 9 大卡）：{ 'YYYY-MM-DD': {p, c, f（%）, protein, carb, fat（g）} } */
+export function macroSplit(food) {
+  const o = {};
+  for (const d in food || {}) {
+    const x = food[d], kp = x.protein * 4, kc = x.carb * 4, kf = x.fat * 9, t = kp + kc + kf;
+    if (!(t > 0)) continue;
+    const p = Math.round(kp / t * 100), f2 = Math.round(kf / t * 100);
+    o[d] = { p, c: 100 - p - f2, f: f2, protein: x.protein, carb: x.carb, fat: x.fat };
+  }
+  return o;
+}

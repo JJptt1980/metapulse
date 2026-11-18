@@ -56,3 +56,31 @@ export function weekReport(S, daily, today, mode = 'roll') {
   const wNow = wAvg(start, today), wPrev = wAvg(prevStart, prevEnd);
   return { from: start, to: today, cur: { ...stat(cur), balance: cur.balance }, prev: stat(prev), days: cur.days, weight: wNow, weightPrev: wPrev, weightChange: wNow != null && wPrev != null ? wNow - wPrev : null };
 }
+
+/**
+ * 圖表用：from～to 每天的存摺（每天剩多少＋當天的存摺餘額，餘額算法跟今日頁一樣，照 mode 分期）
+ * 沒記錄的日子照今日頁的算法當作沒吃（logged＝false，圖上不畫長條）
+ * @returns {[{date,budget,eaten,refund,left,logged,balance}]}
+ */
+export function ledgerSeries(meals, activity, daily, from, to, mode = 'roll') {
+  const out = [];
+  if (!from || from > to) return out;
+  let first = windowStart(from, mode);
+  const all = ledger(meals, activity, daily, to, mode, first).days, by = {};
+  for (const d of all) by[d.date] = d;
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    const ws = windowStart(d, mode);
+    let bal = 0; for (let x = ws; x <= d; x = addDays(x, 1)) bal += by[x].left;
+    out.push({ ...by[d], balance: roundTo(bal) });
+  }
+  return out;
+}
+
+/** 圖表用：每天運動消耗，分成 Health Connect（hc）和手動記錄（manual），refund＝加回幾點 */
+export function activityByDay(hcActivity, exercise) {
+  const o = {};
+  const add = (list, k) => { for (const a of list || []) { if (!a || !a.date) continue; const x = o[a.date] || (o[a.date] = { hc: 0, manual: 0, refund: 0 }); x[k] += +a.kcal || 0; x.refund += (+a.kcal || 0) * BUDGET.exerciseRefund / BUDGET.kcalPerPoint; } };
+  add(hcActivity, 'hc'); add(exercise, 'manual');
+  for (const d in o) o[d].refund = roundTo(o[d].refund);
+  return o;
+}

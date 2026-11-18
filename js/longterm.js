@@ -29,11 +29,28 @@ export function longTermIndex(meals, bmr, todayStr, cfg = LONGTERM) {
     idx = idx === null ? ratio : idx * (1 - cfg.alpha) + ratio * cfg.alpha;
     out.validDays++;
     if (d >= recentFrom) out.recentValid++;
-    out.series.push({ date: d, ratio, index: idx });
+    out.series.push({ date: d, kcal: byDay[d], ratio, index: idx });
   }
   out.index = idx;
   out.ready = out.validDays >= cfg.minValidDays && out.recentValid / cfg.recentDays >= cfg.recentValidRatio;
   if (out.ready) out.level = idx < cfg.veryLow ? 'veryLow' : idx < cfg.low ? 'low' : 'ok';
+  return out;
+}
+
+/**
+ * 圖表用：把指數序列攤成每天一格的日期軸（from 之前的日子不畫，但指數仍用全部記錄算）
+ * 跳過的日子（沒記錄或不完整）ratio、index、kcal 都是 null
+ * @returns {{dates:string[], ratio:(number|null)[], index:(number|null)[], kcal:(number|null)[]}}
+ */
+export function longTermRows(series, from = '') {
+  const out = { dates: [], ratio: [], index: [], kcal: [] };
+  const s = (series || []).filter(x => !from || x.date >= from);
+  if (!s.length) return out;
+  const m = {}; for (const x of s) m[x.date] = x;
+  for (let d = s[0].date; d <= s[s.length - 1].date; d = addDays(d, 1)) {
+    const x = m[d];
+    out.dates.push(d); out.ratio.push(x ? x.ratio : null); out.index.push(x ? x.index : null); out.kcal.push(x ? x.kcal : null);
+  }
   return out;
 }
 

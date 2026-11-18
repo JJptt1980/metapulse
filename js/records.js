@@ -158,3 +158,36 @@ export function latestText(entries) {
   const l = latestByType(entries), N = { wt: '體重', bp: '血壓', dose: '注射', bc: '體組成' };
   return Object.keys(N).filter(k => l[k]).map(k => N[k] + ' ' + md(l[k].date) + (l[k].time ? ' ' + l[k].time : '')).join('・');
 }
+
+/**
+ * 每週用藥：該吃幾次、吃了幾次、準時幾次（設定時間前後 1 小時內）；打針看和上一針隔幾天（6～8 天算準時）
+ * 一種藥從 since（沒有就用最早的記錄）那天開始算；週一或週日開始（weekStart 'sun' 才從週日）
+ * @returns {[{start, need, taken, onTime, doses:[{date, gap, ok}]}]}
+ */
+export function medAdherence(meds, medLog, entries, from, to, weekStart = 'mon') {
+  const out = [];
+  if (!from || from > to) return out;
+  const mins = t => { const [a, b] = String(t || '').split(':').map(Number); return a * 60 + b; };
+  const log = {}; for (const x of medLog || []) log[x.med + '|' + x.date] = x;
+  const list = (meds || []).filter(m => m && m.id && m.name && m.time).map(m => ({ ...m, since: m.since || (medLog || []).filter(x => x.med === m.id).map(x => x.date).sort()[0] || to }));
+  const doses = [...new Set((entries || []).filter(e => e.dose > 0).map(e => e.date))].sort();
+  const wk = n => n - (weekStart === 'sun' ? new Date(n * 864e5).getUTCDay() : (new Date(n * 864e5).getUTCDay() + 6) % 7);
+  const weeks = {};
+  const W = n => { const s = wk(n); return weeks[s] || (weeks[s] = { start: fromDn(s), need: 0, taken: 0, onTime: 0, doses: [] }); };
+  for (let n = dn(from); n <= dn(to); n++) {
+    const d = fromDn(n);
+    for (const m of list) {
+      if (m.since > d) continue;
+      const w = W(n), x = log[m.id + '|' + d]; w.need++;
+      if (!x) continue;
+      w.taken++;
+      const t = new Date(x.at); if (!Number.isNaN(t.getTime()) && Math.abs(t.getHours() * 60 + t.getMinutes() - mins(m.time)) <= 60) w.onTime++;
+    }
+  }
+  doses.forEach((d, i) => {
+    if (d < from || d > to) return;
+    const gap = i ? dn(d) - dn(doses[i - 1]) : null;
+    W(dn(d)).doses.push({ date: d, gap, ok: gap === null ? null : Math.abs(gap - DOSE_INTERVAL_DAYS) <= 1 });
+  });
+  return Object.keys(weeks).map(Number).sort((a, b) => a - b).map(k => weeks[k]).filter(w => w.need || w.doses.length);
+}

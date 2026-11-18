@@ -16,10 +16,24 @@ export function itemCard(item, opts = {}) {
   const nameIn = h('input.name.grow', { value: item.name, placeholder: '食物名稱', 'aria-label': '食物名稱' });
   nameIn.oninput = () => { item.name = nameIn.value; opts.onChange?.(); };
   const big = h('div.big.num');
-  const sub = h('div.mu.small.num');
-  const head = h('div.row', h('div.grow', nameIn, sub), big);
+  const sub = h('div.mu.small.num.one');
+  const head = h('div.row', h('div.grow', { style: { minWidth: 0 } }, nameIn, sub), big);
   if (opts.onRemove) head.append(h('button.link', { type: 'button', 'aria-label': '移除', onclick: opts.onRemove, style: { color: 'var(--mu)' } }, icon('x')));
   card.append(head);
+
+  // 改了名稱：問要不要用新名稱重新估算（只改名字時，營養素不會跟著變）
+  if (opts.onReanalyze) {
+    const was = item.name || '';
+    const ask = h('div.row.small', { style: { display: 'none', marginTop: '6px', gap: '8px' } });
+    const btn = h('button.ghost', { type: 'button', style: { whiteSpace: 'nowrap', minHeight: '36px', padding: '0 12px' } }, '重新估算');
+    ask.append(h('span.grow.one', '名稱改了，要重新估算營養嗎？'), btn);
+    btn.onclick = () => {
+      const n = nameIn.value.trim(); if (!n) return;
+      opts.onReanalyze('正確的食物是「' + n + '」' + (was && was !== n ? '（原本辨識成「' + was + '」）' : '') + '，請照這個名稱和份量重新估算營養', btn);
+    };
+    nameIn.addEventListener('input', () => { const n = nameIn.value.trim(); ask.style.display = n && n !== was ? '' : 'none'; });
+    card.append(ask);
+  }
 
   /* ---- 微調抽屜 ---- */
   const body = h('div');
@@ -111,8 +125,8 @@ export function itemCard(item, opts = {}) {
   function refresh() {
     const t = itemTotals(item);
     big.textContent = t.points + ' 點';
-    sub.textContent = fmtQty(t.finalQty, item.unit) + (item.unit !== 'serving' ? '（' + r1(t.servings) + ' 份）' : '') + ' · ' + Math.round(t.kcal) + ' 大卡 · 蛋白質 ' + r1(t.protein) + ' g';
-    conv.textContent = describe(item);
+    sub.textContent = fmtQty(t.finalQty, item.unit) + '・' + Math.round(t.kcal) + ' 大卡・蛋白質 ' + r1(t.protein) + ' g';   // 一行；幾份移到「份量」那裡
+    conv.textContent = describe(item) + (item.unit !== 'serving' ? '・共 ' + r1(t.servings) + ' 份' : '');
     sliderTxt.textContent = '';
     sliderTxt.append(h('span.mu', '× ' + (+item.slider).toFixed(2)), h('b.num', '最終 ' + fmtQty(t.finalQty, item.unit) + ' · ' + t.points + ' 點'));
     totalsTxt.textContent = '本項合計：' + Math.round(t.kcal) + ' 大卡 · 蛋白質 ' + r1(t.protein) + ' g · 碳水 ' + r1(t.carb) + ' g · 脂肪 ' + r1(t.fat) + ' g · 纖維 ' + r1(t.fiber) + ' g';

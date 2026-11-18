@@ -126,13 +126,21 @@ function stageBarWithTarget(hours, shift, targetH) {
 }
 
 /** 斷食現況（今日頁排順序用）：fasting＝正在斷食、reached＝已達目標 */
+/** 記完餐沒按「結束進餐」時，幾小時後自動算斷食（設定可改；0＝不自動） */
+export const AUTO_START = [[1, '1'], [1.5, '1.5'], [2, '2'], [3, '3'], [4, '4'], [0, '不自動']]   // 單位：小時;
+export function autoStartHours() {
+  const v = S.prefs.fastAutoHours;
+  return v === 0 ? 0 : (+v > 0 ? +v : FASTING.fastingFromHours);
+}
+const autoReached = hours => { const a = autoStartHours(); return a > 0 && hours >= a; };
+
 export function fastInfo(now = Date.now()) {
   const P = S.prefs, mode = P.fastMode || 'PURE_DYNAMIC';
   const f = currentFast(S.meals, S.fasts, now, P.fastOverride);
   if (!f.start) return { fasting: false, reached: false };
   const tg = targetOf(mode, f, now), win = tg.win || null, ov = f.override;
   const e = fastEnd(f.start, tg.hours, ov, now);
-  const fasting = !!((ov && Number.isFinite(ov.start)) || f.manual || (win ? !win.inWindow : f.hours >= FASTING.fastingFromHours));
+  const fasting = !!((ov && Number.isFinite(ov.start)) || f.manual || (win ? !win.inWindow : autoReached(f.hours)));
   return { fasting, reached: e.left <= 0, hours: f.hours, left: e.left, start: f.start, end: e.end, shift: mealShift(f.lastMeal) };
 }
 
@@ -154,7 +162,7 @@ export function fastingCard() {
   const e = fastEnd(f.start, tg.hours, ov, now);
   const over = e.left < 0;
   const pct = Math.round(e.pct);
-  const fasting = (ov && Number.isFinite(ov.start)) || f.manual || (win ? !win.inWindow : f.hours >= FASTING.fastingFromHours);
+  const fasting = (ov && Number.isFinite(ov.start)) || f.manual || (win ? !win.inWindow : autoReached(f.hours));
   const shortStage = FASTING.stages[st.index].short || st.text.split('，')[0];
   const eatLine = win && win.inWindow ? '進食窗口到 ' + hm(win.closesAt) : '上一餐 ' + hm(f.start) + '・已經 ' + dur(f.hours);
   const summary = !fasting ? eatLine : (over ? '已超過 ' + dur(-e.left) : '還剩 ' + dur(e.left)) + '（' + pct + '%）・' + shortStage;
@@ -164,7 +172,7 @@ export function fastingCard() {
     // 第 0 階段「進食中」：還沒按「結束進餐」，不倒數、不顯示百分比和階段
     body.append(h('div.small.one', { style: { fontWeight: 600 } }, eatingTip(now, f.start)),   // 每 2 分鐘換一句（今日頁每分鐘重畫）
       h('div', { style: { margin: '12px 0 4px', color: 'var(--ac)', fontWeight: 650, fontSize: '17px', lineHeight: 1.6 } }, eatingText(now, f.start)),
-      tip('記完餐後是第 0 階段「進食中」。吃完按「結束進餐，開始斷食」，斷食就從按的那一刻開始算；忘了按的話，距上一餐 ' + FASTING.fastingFromHours + ' 小時後會自動從上一餐開始算。'));
+      tip('記完餐後是第 0 階段「進食中」。吃完按「結束進餐，開始斷食」，斷食就從按的那一刻開始算。' + (autoStartHours() ? '忘了按的話，距上一餐 ' + autoStartHours() + ' 小時後會自動從上一餐開始算。' : '目前設定「不自動」：一定要按才會開始。') + '可以到「設定」→「斷食」修改。'));
   } else {
   // 1. 斷食環：中間是還剩多久與百分比
   const totalH = (e.end - f.start) / H;

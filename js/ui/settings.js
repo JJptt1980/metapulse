@@ -13,6 +13,7 @@ import { dangerCard } from './reset.js';
 import { medsSettings } from './meds.js';
 import { soundSettings } from './sounds.js';
 import { WEEK_MODES } from '../ledger.js';
+import { AUTO_START, autoStartHours } from './fasting.js';
 
 const r1 = x => Math.round(x * 10) / 10;
 
@@ -242,7 +243,7 @@ function prefsCard() {
 export function renderSettings(root) {
   root.textContent = '';
   sectionBudget.left = 1;
-  root.append(healthCard(), omronCard(), backupCard(), profileCard(), medsSettings(), aiCard(),
+  root.append(healthCard(), omronCard(), backupCard(), profileCard(), fastSettings(), medsSettings(), aiCard(),
     (() => { const sl = sumLine(); sl.textContent = S.foodLibrary.length ? S.foodLibrary.length + ' 項' : '還沒有常用食物'; return section('lib', '常用食物庫', sl, [libraryManager(itemCard)]); })(),
     prefsCard(),
     (() => { const sl = sumLine(); sl.textContent = '名詞說明・免責聲明・清除資料'; return section('other', '其他', sl, [
@@ -260,4 +261,16 @@ export function showDisclaimerOnce() {
   m.append(h('div.card', h('h2', '使用前請閱讀'), legal(),
     h('button.pri.full', { type: 'button', onclick: () => { L.disclaimerOk = true; commitLocal(); m.classList.remove('on'); } }, '我了解了')));
   m.classList.add('on');
+}
+
+/* ---------- 斷食 ---------- */
+function fastSettings() {
+  const sumEl = sumLine();
+  const draw = () => { const a = autoStartHours(); sumEl.textContent = '忘了按「結束進餐」：' + (a ? a + ' 小時後自動開始' : '不自動'); };
+  draw();
+  return section('fastset', '斷食', sumEl, [
+    h('div.small', { style: { fontWeight: 600 } }, '沒按「結束進餐」，幾小時後自動開始（小時）'),
+    h('div', { style: { marginTop: '8px' } }, pills(AUTO_START, autoStartHours(), v => { S.prefs.fastAutoHours = v; commit(); draw(); })),
+    tip('自動開始時，斷食一樣從上一餐的時間開始算。選「不自動」就一定要按「結束進餐，開始斷食」才會開始。這個設定會跟著 Google Drive 同步，斷食卡、桌面小工具和斷食通知都會照這個時間。'),
+  ]);
 }

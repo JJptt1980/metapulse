@@ -139,3 +139,5 @@ tests/                node --test
 ## 授權
 
 MIT License
+
+申請 AI 的 API 金鑰：見 [apikey.html](https://killnopig.github.io/metapulse/apikey.html)（只有拍照辨識、AI 建議、週報 AI 總結需要；每個人用自己的金鑰）。

@@ -73,7 +73,7 @@ export function openAddMeal(o = {}) {
     };
 
     async function runAI(args) {
-      if (!L.geminiKey) { status.textContent = ''; status.append(h('div.notice', '還沒設定 AI 的 API 金鑰。請到「設定」→「AI 辨識食物」輸入。')); return; }
+      if (!L.geminiKey) { status.textContent = ''; status.append(h('div.notice', '還沒設定 AI 的 API 金鑰。請到「設定」→「AI 辨識食物」輸入。', h('a', { href: 'apikey.html', style: { marginLeft: '6px', color: 'var(--ac)', fontWeight: 600 } }, '怎麼申請 ›'))); return; }
       busy?.abort(); busy = new AbortController();
       const t0 = Date.now(), label = args.image ? '辨識照片中…' : '估算中…';
       setBusy(label);

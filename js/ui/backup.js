@@ -199,9 +199,15 @@ export function backupCard() {
   };
   file.onchange = async () => {
     const f = file.files && file.files[0]; file.value = ''; if (!f) return;
-    try { const t = await f.text(); ta.value = t; await run(use, t, '檔案「' + f.name + '」'); } catch (e) { say(outText, '讀取檔案失敗。'); }
+    try { const t = await f.text(); ta.value = t; syncClr(); await run(use, t, '檔案「' + f.name + '」'); } catch (e) { say(outText, '讀取檔案失敗。'); }
   };
-  const gen = h('button.ghost', { type: 'button', onclick: () => { ta.value = JSON.stringify(S); ta.select(); L.lastBackup = Date.now(); commitLocal(); draw(); say(outText, '已產生（' + S.entries.length + ' 筆身體記錄、' + S.meals.length + ' 筆餐點），請全選、複製後另外保存。', true); } }, '產生存檔文字');
+  const gen = h('button.ghost', { type: 'button', onclick: () => { ta.value = JSON.stringify(S); syncClr(); ta.select(); L.lastBackup = Date.now(); commitLocal(); draw(); say(outText, '已產生（' + S.entries.length + ' 筆身體記錄、' + S.meals.length + ' 筆餐點），請全選、複製後另外保存。', true); } }, '產生存檔文字');
+  // 清除文字：只清框裡的字和下方訊息，不動任何記錄；框是空的就藏起來
+  const clr = h('button.link.small', { type: 'button', style: { display: 'none' } }, '清除文字');
+  const clrRow = h('div', { style: { textAlign: 'right', marginTop: '2px' } }, clr);
+  const syncClr = () => { clr.style.display = ta.value ? '' : 'none'; };
+  clr.onclick = () => { ta.value = ''; outText.textContent = ''; syncClr(); ta.focus(); };
+  ta.addEventListener('input', syncClr);
   const use = h('button.ghost', { type: 'button' }, '匯入或還原');
   use.onclick = () => { if (ta.value.trim()) run(use, ta.value, '貼上的文字'); else { say(outText, '框裡是空的，請先貼上存檔文字。'); ta.focus(); } };
 
@@ -222,7 +228,7 @@ export function backupCard() {
     tip('Google Drive（雲端硬碟）：MetaPulse 的存檔放在一個看不到的專用資料夾，只有這個 app 能讀寫，別人（包括作者）都看不到。手機和雲端的存檔會合併在一起，同一筆記錄以最後修改的為準，不會整份互相蓋掉。', h('br'),
       '同步版：你之前用的「注射與體重記錄 同步版」app。「匯入同步版（Drive）」會把它存在 Google Drive 的記錄搬過來；只會讀取，不會改動同步版，可以重複按，不會重複加入。'),
     sub('其他：文字或檔案'),
-    ta, h('div.grid2', { style: { marginTop: '8px' } }, gen, use), outText,
+    ta, clrRow, h('div.grid2', { style: { marginTop: '6px' } }, gen, use), outText,
     h('label', '或選擇存檔檔案'), file,
     tip('「產生存檔文字」會把全部記錄變成一段文字，可以複製貼到記事本或傳給自己保存。貼上或選擇檔案（.json 或 .txt）後，app 會自動判斷：MetaPulse 的存檔會「還原」（用它取代現在全部的資料，要再按一次確認）；同步版的存檔會「匯入」（只加入新的記錄，可以重複做）。'),
     aiFold(),

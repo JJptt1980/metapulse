@@ -1,6 +1,6 @@
 /* 設定分頁：個人資料與預算、AI 辨識、常用食物庫、外觀、資料、免責聲明 */
 import { S, L, commit, commitLocal, plan, currentWeight } from '../state.js';
-import { h, icon, toast, fold, pills, val, $, section, sumLine, kvTable, sectionBudget, tip } from './common.js';
+import { h, icon, toast, fold, pills, val, $, section, sumLine, kvTable, sectionBudget, tip, setFolds } from './common.js';
 import { ACTIVITY_LEVELS, BUDGET } from '../config.js';
 import { bmrMifflin, ageFrom } from '../points.js';
 import { libraryManager } from './library.js';
@@ -243,7 +243,7 @@ function prefsCard() {
 export function renderSettings(root) {
   root.textContent = '';
   sectionBudget.left = 1;
-  root.append(healthCard(), omronCard(), backupCard(), profileCard(), fastSettings(), medsSettings(), aiCard(),
+  root.append(foldAllBtn(root), healthCard(), omronCard(), backupCard(), profileCard(), fastSettings(), medsSettings(), aiCard(),
     (() => { const sl = sumLine(); sl.textContent = S.foodLibrary.length ? S.foodLibrary.length + ' 項' : '還沒有常用食物'; return section('lib', '常用食物庫', sl, [libraryManager(itemCard)]); })(),
     prefsCard(),
     (() => { const sl = sumLine(); sl.textContent = '名詞說明・免責聲明・清除資料'; return section('other', '其他', sl, [
@@ -251,6 +251,22 @@ export function renderSettings(root) {
       fold('other-legal', h('span.small', '關於本 app 與免責聲明'), [h('div', { style: { marginTop: '8px' } }, legal())]),
       dangerCard()]); })(),
     h('p.mu.small.one', { style: { textAlign: 'center', margin: '18px 0 6px' } }, '覺得好用？', h('a', { href: 'https://ko-fi.com/killnopig', target: '_blank', rel: 'noopener', style: { color: 'var(--ac)' } }, '請我喝杯咖啡'), '（自願）'));
+}
+
+/** 一鍵全部展開／收起：展開只開大卡片，收起連卡片裡的小區塊一起收 */
+function foldAllBtn(root) {
+  const tops = () => root.querySelectorAll(':scope > .card > details');
+  const btn = h('button.link.small', { type: 'button' });
+  const sync = () => { btn.textContent = [...tops()].some(d => d.open) ? '全部收起' : '全部展開'; };
+  btn.onclick = () => {
+    if (btn.textContent === '全部收起') setFolds(root.querySelectorAll('details'), false);
+    else setFolds(tops(), true);
+    sync();
+  };
+  if (!root.dataset.foldSync) { root.dataset.foldSync = 1; root.addEventListener('toggle', () => root.__foldSync?.(), true); }
+  root.__foldSync = sync;
+  setTimeout(sync, 0);
+  return h('div.one', { style: { textAlign: 'right', margin: '-4px 4px 6px' } }, btn);
 }
 
 /** 首次開啟的免責聲明 */

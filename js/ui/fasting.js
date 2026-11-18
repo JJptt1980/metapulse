@@ -4,12 +4,13 @@ import { h, fold, pills, toast, tip, info3, timePick } from './common.js';
 import { FASTING } from '../config.js';
 import { HOURLY_MESSAGES, OMAD_DONE } from '../messages.js';
 import { fuelText, eatingTip, eatingText } from '../lines.js';
-import { currentFast, fastEnd, lastMealGroup, mealShift, stageAt, stageStarts, hourlyMessage, hybridSuggestion, eatingWindow, hm, dur } from '../fasting.js';
+import { currentFast, fastEnd, lastMealGroup, mealShift, stageAt, stageStarts, hourlyMessage, hybridSuggestion, eatingWindow, hm, dur, targetHours } from '../fasting.js';
 import { openAddMeal } from './addMeal.js';
 import { timeStop, gears } from './fx.js';
 import { longTermIndex, weightTrend, longTermMessage, leanTrend, leanSummary } from '../longterm.js';
 import { usage, localDate, roundTo } from '../points.js';
-import { onBoard, dn } from '../records.js';
+import { onBoard, dn, md, wdOf } from '../records.js';
+import { recentFasts } from '../summary.js';
 
 const MODES = [['PURE_DYNAMIC', '自由斷食'], ['HYBRID_GUIDED', '依施打週期'], ['STRICT_MANUAL', '自選固定']];
 const PLANS = ['16:8', '18:6', '20:4', '24H'];
@@ -255,6 +256,17 @@ export function fastingCard() {
     const sp = residualSpark(); if (sp) modeBody.push(sp);
   }
   sec.append(fold('fast-mode', h('span.small', h('b', '模式：' + MODE_NAME[mode]), h('span.mu', '・' + tg.label)), modeBody));
+
+  // 以前的斷食：最近 14 天，每天一行（跟圖表的斷食時間同一套算法），只能看
+  const past = recentFasts(S.meals, S.fasts, localDate(new Date()));
+  if (past.length) {
+    const goal = targetHours(P), met = past.filter(x => x.hours >= goal).length;
+    const rows = past.map(x => h('div.small.num.one', { style: { padding: '3px 0', color: x.hours >= goal ? 'var(--ac)' : 'var(--tx)', fontWeight: x.hours >= goal ? 600 : 400 } },
+      md(x.date) + '（' + wdOf(x.date) + '）' + hm(x.start) + ' → ' + hm(x.end) + '・' + dur(x.hours)));
+    sec.append(fold('fast-past', h('span.small', h('b', '以前的斷食'), h('span.mu', '・近 14 天達標 ' + met + '/' + past.length + ' 天')),
+      [h('div', { style: { marginTop: '6px' } }, ...rows,
+        tip('每天一行：那天結束的最長一段斷食（兩餐之間），跟「圖表」的斷食時間一樣。按過「結束進餐」就從按的時間算，按過「結束斷食」就算到按的時間。達到目標 ' + goal + ' 小時的用主色。漏記一餐時會算得太長。'))]));
+  }
   body.append(sec);
 
   // 斷食中而且還沒達標：一直展開；其他時候收成一行（使用者自己開合的照舊記住）

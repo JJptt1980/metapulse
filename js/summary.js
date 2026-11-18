@@ -57,6 +57,12 @@ export function dailyFastDetail(meals, fasts) {
   return out;
 }
 
+/** 最近幾天的斷食，新的在前：[{date, hours, start, end}]。每天一筆（那天結束的最長一段），跟圖表一樣 */
+export function recentFasts(meals, fasts, today, days = 14) {
+  const d = dailyFastDetail(meals, fasts), from = fromDn(dn(today) - (days - 1));
+  return Object.keys(d).filter(k => k >= from && k <= today).sort().reverse().map(k => ({ date: k, ...d[k] }));
+}
+
 /**
  * @param S 狀態；P 點數預算（plan()）；today 'YYYY-MM-DD'
  */

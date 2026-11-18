@@ -3,9 +3,9 @@
 import { S, L, commitLocal, plan } from '../state.js';
 import { h, fold, pills, toast, tip } from './common.js';
 import { buildSummary, dailyFood, dailyFastDetail } from '../summary.js';
-import { FASTING } from '../config.js';
 import { capPlugin } from '../health.js';
 import { localDate } from '../points.js';
+import { targetHours } from '../fasting.js';
 import { sortEntries, onBoard, dn, fromDn, md, wdOf } from '../records.js';
 import { longTermStatusCard, leanParts, longTermStatus, leanStatus } from './fasting.js';
 import { leanSummary } from '../longterm.js';
@@ -121,8 +121,8 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
   const fdet = dailyFastDetail(S.meals, S.fasts);
   const fAxis = span(Object.keys(fdet).filter(d => (!cut || d >= cut) && d <= today).sort());
   if (fAxis.length) {
-    const P = S.prefs || {}, mode = P.fastMode || 'PURE_DYNAMIC';
-    const tgt = mode === 'STRICT_MANUAL' ? FASTING.plans[P.strictPlan || '16:8'] : mode === 'HYBRID_GUIDED' ? 16 : (+P.fastTarget || FASTING.freeTargetDefault);
+    const P = S.prefs || {};
+    const tgt = targetHours(P);
     const hrs = fAxis.map(d => (fdet[d] ? +fdet[d].hours.toFixed(1) : null));
     const last7 = fAxis.filter(d => d >= fromDn(dn(today) - 6) && fdet[d]).map(d => fdet[d].hours);
     const hmOf = t => { const x = new Date(t); return md(localDate(x)) + ' ' + String(x.getHours()).padStart(2, '0') + ':' + String(x.getMinutes()).padStart(2, '0'); };

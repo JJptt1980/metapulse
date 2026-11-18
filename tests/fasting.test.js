@@ -1,9 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { currentFast, mealShift, stageAt, hourlyMessage, hybridSuggestion, eatingWindow, closeFastsForMeal, reopenFastsForMeal, overrideValid, lastMealGroup, mealEndsFast } from '../js/fasting.js';
+import { currentFast, mealShift, stageAt, hourlyMessage, hybridSuggestion, eatingWindow, closeFastsForMeal, reopenFastsForMeal, overrideValid, lastMealGroup, mealEndsFast, targetHours } from '../js/fasting.js';
 import { longTermIndex, weightTrend, longTermMessage } from '../js/longterm.js';
 import { HOURLY_MESSAGES } from '../js/messages.js';
-import { addDays } from '../js/points.js';
+import { addDays, localDate } from '../js/points.js';
+import { recentFasts } from '../js/summary.js';
 
 const H = 3600000;
 const t0 = new Date(2026, 10, 17, 20, 0).getTime();
@@ -177,4 +178,29 @@ test('存這一餐會不會結束斷食（要不要按兩次確認）', () => {
   assert.equal(mealEndsFast(fi, t0 - 7 * H), false);                // 補記斷食前的一餐
   assert.equal(mealEndsFast({ fasting: false, start: t0 - 6 * H }, t0), false);   // 第 0 階段進食中
   assert.equal(mealEndsFast({ fasting: false, reached: false }, t0), false);      // 沒有任何記錄
+});
+
+test('以前的斷食：最近 14 天每天一行，新的在前；手動結束進餐的時間優先', () => {
+  const D = 864e5, day0 = new Date(2026, 10, 18, 0, 0).getTime();
+  const at = (d, hh) => new Date(day0 - d * D + hh * H).toISOString();
+  const meals = [], fasts = [];
+  // 前 20 天：每天 12 點、19 點各一餐 → 每天結束一段 17 小時的斷食（19:00 → 隔天 12:00）
+  for (let d = 20; d >= 0; d--) { meals.push({ id: 'a' + d, group: 'a' + d, at: at(d, 12) }); meals.push({ id: 'b' + d, group: 'b' + d, at: at(d, 19) }); }
+  fasts.push({ id: 'f', start: at(1, 21), end: null });           // 昨天 21 點按了「結束進餐」
+  const today = localDate(new Date(day0));
+  const r = recentFasts(meals, fasts, today);
+  assert.equal(r.length, 14);
+  assert.equal(r[0].date, today);
+  assert.ok(r[0].date > r[1].date);
+  assert.equal(r[0].hours, 15);                                   // 21:00 → 12:00
+  assert.equal(r[1].hours, 17);
+  assert.equal(recentFasts(meals, fasts, today, 3).length, 3);
+  assert.deepEqual(recentFasts([], [], today), []);
+});
+
+test('斷食目標時數依模式', () => {
+  assert.equal(targetHours({ fastMode: 'STRICT_MANUAL', strictPlan: '18:6' }), 18);
+  assert.equal(targetHours({ fastMode: 'HYBRID_GUIDED' }), 16);
+  assert.equal(targetHours({ fastMode: 'PURE_DYNAMIC', fastTarget: 20 }), 20);
+  assert.ok(targetHours({}) > 0);
 });

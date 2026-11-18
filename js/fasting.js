@@ -63,6 +63,12 @@ export function reopenFastsForMeal(fasts, group) {
   return n;
 }
 
+/** 目前模式的斷食目標（小時）：圖表和「以前的斷食」判斷達標用 */
+export function targetHours(prefs = {}, cfg = FASTING) {
+  const mode = prefs.fastMode || 'PURE_DYNAMIC';
+  return mode === 'STRICT_MANUAL' ? cfg.plans[prefs.strictPlan || '16:8'] : mode === 'HYBRID_GUIDED' ? 16 : (+prefs.fastTarget || cfg.freeTargetDefault);
+}
+
 /** 存這一餐會不會結束斷食：斷食中，而且用餐時間在斷食開始之後（補記更早的一餐不會） */
 export function mealEndsFast(fi, at) {
   return !!(fi && fi.fasting && Number.isFinite(fi.start) && Number.isFinite(at) && at >= fi.start);

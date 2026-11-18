@@ -73,7 +73,7 @@ export function openAddMeal(o = {}) {
       status.append(h('div.notice', msg, e.name === 'AbortError' ? '' : h('div.tiny.mu', { style: { marginTop: '4px' } }, '可以改用文字描述、常用食物，或下方「自己輸入一項」。')));
     };
 
-    async function runAI(args) {
+    async function runAI({ replace, ...args }) {   // replace：用同一張照片重新辨識，成功後取代上次照片辨識出的品項
       if (!L.geminiKey) { status.textContent = ''; status.append(h('div.notice', '還沒設定 AI 的 API 金鑰。請到「設定」→「AI 辨識食物」輸入。', h('a', { href: 'apikey.html', style: { marginLeft: '6px', color: 'var(--ac)', fontWeight: 600 } }, '怎麼申請 ›'))); return; }
       busy?.abort(); busy = new AbortController();
       const t0 = Date.now(), label = args.image ? '辨識照片中…' : '估算中…';
@@ -85,6 +85,7 @@ export function openAddMeal(o = {}) {
         if (L.geminiApiOk !== res.api) { L.geminiApiOk = res.api; commitLocal(); }
         status.append(h('div.mu.tiny', '辨識花了 ' + (res.ms / 1000).toFixed(1) + ' 秒'));
         if (!res.items.length) { status.append(h('div.notice', '沒有辨識到食物。' + (res.note || ''))); return; }
+        if (replace) for (let j = items.length - 1; j >= 0; j--) if (items[j].source === 'ai-photo') items.splice(j, 1);   // 先拿掉上次照片辨識的
         for (const x of res.items) items.push({
           name: x.name, per: x.per, servingGrams: x.servingGrams || 100, fistsPerServing: x.fistsPerServing,
           unit: 'serving', qty: x.servings, slider: 1, source: args.image ? 'ai-photo' : 'ai-text', foodId: '', aiRaw: res.raw,
@@ -113,7 +114,9 @@ export function openAddMeal(o = {}) {
               when = new Date(lm); whenIn.value = toLocalInput(when); whenSet = true; drawWhen();
               toast('用餐時間已改成照片的時間 ' + toLocalInput(when).slice(11));
             }
-            prev.textContent = ''; prev.append(h('img.preview', { src: img.dataUrl, alt: '餐點照片' }));
+            prev.textContent = ''; prev.append(h('img.preview', { src: img.dataUrl, alt: '餐點照片' }),
+              // 照片一直留著：辨識不對、或食物被刪掉了，都可以從這張照片重來
+              h('button.ghost.full', { type: 'button', style: { marginTop: '8px' }, onclick: () => { if (lastImage) runAI({ image: lastImage, text: hint.value.trim(), replace: true }); } }, icon('camera'), ' 用這張照片重新辨識'));
             if (L.keepThumbs) { try { thumb = (await shrinkImage(f, 200, 0.7, true)).dataUrl; } catch (e) { /* 縮圖失敗不影響 */ } }
             runAI({ image: img, text: hint.value.trim() });
           } catch (e) { showErr(e); }

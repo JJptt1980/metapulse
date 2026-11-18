@@ -18,15 +18,24 @@ export function itemCard(item, opts = {}) {
   const big = h('div.big.num');
   const sub = h('div.mu.small.num.one');
   const head = h('div.row', h('div.grow', { style: { minWidth: 0 } }, nameIn, sub), big);
-  if (opts.onRemove) head.append(h('button.link', { type: 'button', 'aria-label': '移除', onclick: opts.onRemove, style: { color: 'var(--mu)' } }, icon('x')));
+  if (opts.onRemove) {
+    // 刪除這一項：垃圾桶圖示，按兩次才刪（第一次變紅字提醒，3 秒內再按一次）
+    const del = h('button.link', { type: 'button', 'aria-label': '刪除這一項', style: { color: 'var(--mu)', whiteSpace: 'nowrap' } }, icon('trash'));
+    del.onclick = () => {
+      if (del.dataset.c) { opts.onRemove(); return; }
+      del.dataset.c = 1; del.textContent = '再按一次刪除'; del.style.color = 'var(--warn)';
+      setTimeout(() => { if (!del.isConnected) return; del.dataset.c = ''; del.textContent = ''; del.append(icon('trash')); del.style.color = 'var(--mu)'; }, 3000);
+    };
+    head.append(del);
+  }
   card.append(head);
 
   // 改了名稱：問要不要用新名稱重新估算（只改名字時，營養素不會跟著變）
   if (opts.onReanalyze) {
     const was = item.name || '';
-    const ask = h('div.row.small', { style: { display: 'none', marginTop: '6px', gap: '8px' } });
-    const btn = h('button.ghost', { type: 'button', style: { whiteSpace: 'nowrap', minHeight: '36px', padding: '0 12px' } }, '重新估算');
-    ask.append(h('span.grow.one', '名稱改了，要重新估算營養嗎？'), btn);
+    const ask = h('div.row.small', { style: { display: 'none', marginTop: '6px', gap: '8px', color: 'var(--ac)', fontWeight: 700 } });
+    const btn = h('button.pri', { type: 'button', style: { whiteSpace: 'nowrap', minHeight: '36px', padding: '0 12px' } }, '用新名稱重新估算');
+    ask.append(h('span.one', '✎ 名稱改了 →'), btn);
     btn.onclick = () => {
       const n = nameIn.value.trim(); if (!n) return;
       opts.onReanalyze('正確的食物是「' + n + '」' + (was && was !== n ? '（原本辨識成「' + was + '」）' : '') + '，請照這個名稱和份量重新估算營養', btn);

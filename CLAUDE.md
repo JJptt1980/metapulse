@@ -60,6 +60,7 @@ There is no build or lint step. Tests import the pure modules in `js/` directly.
 - `ledger.js`: the points "passbook". Per day: budget = pool/7 + exercise refund, left = budget − eaten; the balance sums `left` over a window chosen in `S.prefs.weekStart` (rolling 7 days / from Sunday / from Monday). `allActivity(S)` combines Health Connect activity with manual `S.exercise` (kcal = MET × kg × hours, types in `config.js` `EXERCISES`).
 - `notify.js`: local notifications (native only). ID ranges: meds 7000+, dose day 7100, test 7199, fasting 7200–7239. Fasting reminders come from `fastNotes()` in `fasting.js` (frequency and quiet hours live in `L.notify`).
 - `widget.js`: builds the home-screen widget data (fast start/end, stages, `WIDGET_MESSAGES` / `WIDGET_EATING` from `messages.js`, terminal bar symbols) and hands it to the APK's `MapleWidget` plugin on every change and when the page is hidden.
+- `lines.js`: the widget/card fuel line and pep-talk lines. Each is a head × tail combination, one per 2 minutes, with no repeats within a fast (each segment needs heads × tails ≥ its minutes ÷ 2; `tests/lines.test.js` checks this). The order is shuffled per fast-start date. `widget.js` precomputes a `timeline` (2-minute slots up to hour 30) for the APK, which shows the next 16 slots in ViewFlippers.
 - `sounds.js`: user-chosen start/end sounds stored on the device in IndexedDB `metapulse-sounds` (≤2MB each), never in the repo.
 - `health.js`: reads Health Connect through `@capgo/capacitor-health`. Only active in the native APK (`isNative`).
 

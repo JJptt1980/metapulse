@@ -3,6 +3,7 @@ import { S, L, commit, commitLocal, plan, uid } from '../state.js';
 import { h, fold, pills, toast, tip, info3, timePick } from './common.js';
 import { FASTING } from '../config.js';
 import { HOURLY_MESSAGES, OMAD_DONE } from '../messages.js';
+import { fuelText } from '../lines.js';
 import { currentFast, fastEnd, lastMealGroup, mealShift, stageAt, stageStarts, hourlyMessage, hybridSuggestion, eatingWindow, hm, dur } from '../fasting.js';
 import { openAddMeal } from './addMeal.js';
 import { timeStop, gears } from './fx.js';
@@ -169,7 +170,7 @@ export function fastingCard() {
     hm(f.start) + ' 開始 → ' + hm(e.end) + ' 結束' + ((ov && (Number.isFinite(ov.start) || Number.isFinite(ov.end))) ? '（已修改）' : '')));
   // 3. 身體現在的狀態
   body.append(h('div', { style: { marginTop: '6px', fontWeight: 650 } }, '身體現在：' + st.text),
-    h('div.small.one', { style: { fontWeight: 600 } }, FASTING.stages[st.index].fuel),
+    h('div.small.one', { style: { fontWeight: 600 } }, fuelText(st.index, f.start + stageStarts(shift)[st.index] * H, Date.now(), f.start)),  // 每 2 分鐘換一句（今日頁每分鐘重畫）
     h('div.mu.tiny.one', st.nextAt != null ? '再 ' + dur(st.nextAt - f.hours) + ' 進入「' + FASTING.stages[st.index + 1].short + '」' + (Math.abs(f.start + st.nextAt * H - e.end) < 5 * 60000 ? '（剛好達標）' : '') : '已是最後階段'),
     tip('階段時間因人而異，僅供參考。' + (shift ? '上一餐比較豐盛，階段往後挪約 ' + shift + ' 小時。' : '')));
   // 4. 心靈雞湯

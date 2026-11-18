@@ -29,12 +29,15 @@ node --test --test-name-pattern="合併" tests/   # tests whose name matches
 python3 -m http.server 8000                # local preview (ES modules need http://, not file://)
 ```
 
+Visual checks: headless Chrome (`--headless=new`) can't go narrower than about 500px, so to check the 412px phone width, load the page inside an iframe of that width and screenshot the wrapper. Use made-up data only and stop the local server afterwards.
+
 There is no build or lint step. Tests import the pure modules in `js/` directly. `package.json` sets `"type":"module"`.
 
 ## Release / cache busting
 
 - The version lives in `index.html` as `window.APP_VERSION = 'x.y.z'`. Bump it on every deploy, then commit and push `main`.
 - The app polls for that regex and shows an "update available" prompt.
+- After pushing, poll the live site with curl until it serves the new `APP_VERSION`; only then is the deploy done.
 - `index.html` builds an import map that appends `?v=APP_VERSION` to every module. **Every new module must be added to the module list in `index.html`**, or it will be served from stale cache or fail to resolve.
 
 ## Architecture
@@ -48,6 +51,7 @@ There is no build or lint step. Tests import the pure modules in `js/` directly.
 - `fasting.js`: current fast, stages shifted by big meals, end/percent, hybrid-mode suggestion, eating window.
   - Priority: manual override (`S.prefs.fastOverride`), then manual fast records (`S.fasts`), then last meal.
   - The override stays valid until a new meal group is logged.
+  - Before 「結束進餐」 is pressed the UI shows stage 0 「進食中」 (no countdown). The fast starts automatically `S.prefs.fastAutoHours` hours after the last meal (default `FASTING.fastingFromHours` = 2; 0 = never), set in the settings tab.
 - `longterm.js`: EMA of daily kcal ÷ BMR. `messages.js` holds the hourly fasting texts.
 - `records.js`, `migrate.js`: dose/body/BP helpers and import from the old "dose-tracker-sync" app's backup.
   - Two records are the same only if they have the same `sid` and the same date.
@@ -78,6 +82,13 @@ There is no build or lint step. Tests import the pure modules in `js/` directly.
 - `app.js` wires the four bottom tabs (飲食運動 = `today.js`, 身體 = `log.js`, 圖表 = `charts.js`, 設定 = `settings.js`) and re-renders on state changes.
 - `ui/fx.js` effects are all original: CSS, SVG gears, Web Audio, and `speechSynthesis`. Don't add copyrighted audio or images. (`assets/zawarudo.m4a` is original: generated with macOS `say -v "Grandpa (中文（台灣）)"` and `afconvert`, so it may stay.)
 - Chart.js is lazy-loaded from cdnjs in `ui/charts.js`.
+- Back gesture: the APK's `MainActivity` (`OnBackPressedCallback`) calls `window.__mpBack()` (`app.js`), which uses `backLayer()` in `ui/common.js`. Order: user-opened folds inside the sheet → the sheet → user-opened folds on the page → back to the today tab → 「再滑一次就離開」 toast (a second swipe within 2s exits). Any new overlay must hook into this chain, or a swipe closes the app.
+
+## Landing page (`landing/`)
+
+A separate promotional page (`index.html`, `style.css`, `main.js`, `og.png`) at `/metapulse/landing/`. Landing tasks must not touch the app itself and need no `APP_VERSION` bump. Its spec is `LANDING_PROMPT.md`, which, like `PROMPT.md`, is gitignored and never committed. The copy is public, so it must stay conservative:
+- No weight-loss claims, "燃脂", "肝醣耗盡", drug or injection names. Meds appear only as 「用藥與注射提醒」.
+- Points, calories, and nutrients are always 「估算」, and every mock screen is labelled 「示意畫面，非真實資料」.
 
 ## Hard constraints
 

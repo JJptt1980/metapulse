@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { currentFast, mealShift, stageAt, hourlyMessage, hybridSuggestion, eatingWindow } from '../js/fasting.js';
+import { currentFast, mealShift, stageAt, hourlyMessage, hybridSuggestion, eatingWindow, closeFastsForMeal, reopenFastsForMeal, overrideValid, lastMealGroup } from '../js/fasting.js';
 import { longTermIndex, weightTrend, longTermMessage } from '../js/longterm.js';
 import { HOURLY_MESSAGES } from '../js/messages.js';
 import { addDays } from '../js/points.js';
@@ -133,4 +133,39 @@ test('斷食通知：階段轉換＋達標，跳過勿擾時段', async () => {
   assert.equal(fastNotes(fi, start, 'off').length, 0);
   const hourly = fastNotes(fi, start + 0.5 * H, 'hourly', '23:00', '07:00');
   assert.equal(new Date(hourly[0].at).getHours(), 20);
+});
+
+test('斷食中記一餐再刪掉：斷食接回來，手動改的時間也恢復', () => {
+  const iso = h => new Date(t0 - h * H).toISOString();
+  const meals = [meal(10)];
+  const fasts = [{ id: 'f1', start: iso(6), end: null }];
+  assert.equal(currentFast(meals, fasts, t0).hours, 6);
+  const ov = { group: lastMealGroup(meals, t0), start: t0 - 8 * H };
+  assert.equal(currentFast(meals, fasts, t0, ov).hours, 8);
+
+  // 記一餐（測試拍照）：斷食結束
+  const at = iso(0.5);
+  meals.push({ id: 'mx', group: 'gx', at, kcal: 300, carb: 30 });
+  closeFastsForMeal(fasts, at, 'gx');
+  assert.equal(fasts[0].end, at);
+  assert.equal(fasts[0].endedBy, 'gx');
+  assert.equal(currentFast(meals, fasts, t0, ov).hours, 0.5);
+  assert.equal(overrideValid(ov, lastMealGroup(meals, t0)), false);
+
+  // 刪掉這一餐：斷食接回來
+  meals.pop();
+  assert.equal(reopenFastsForMeal(fasts, 'gx'), 1);
+  assert.equal(fasts[0].end, null);
+  assert.equal(fasts[0].endedBy, undefined);
+  assert.equal(currentFast(meals, fasts, t0).hours, 6);
+  assert.equal(currentFast(meals, fasts, t0, ov).hours, 8);
+});
+
+test('刪掉一餐時，之後又開始了別的斷食就不接回舊的', () => {
+  const iso = h => new Date(t0 - h * H).toISOString();
+  const fasts = [{ id: 'f1', start: iso(6), end: iso(3), endedBy: 'gx' }, { id: 'f2', start: iso(1), end: null }];
+  assert.equal(reopenFastsForMeal(fasts, 'gx'), 0);
+  assert.equal(fasts[0].end, iso(3));
+  assert.equal(fasts[0].endedBy, undefined);
+  assert.equal(reopenFastsForMeal(fasts, 'gy'), 0);
 });

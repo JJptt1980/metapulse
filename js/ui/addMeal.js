@@ -1,12 +1,14 @@
 /* 新增／編輯一餐：拍照、文字、常用食物、完全手動，共用同一個草稿清單 */
 import { S, L, commit, commitLocal, uid } from '../state.js';
-import { h, icon, toast, openSheet, closeSheet, toLocalInput, fmtPts } from './common.js';
+import { h, icon, toast, tip, openSheet, closeSheet, toLocalInput, fmtPts } from './common.js';
 import { itemCard, blankItem } from './mealEditor.js';
 import { foodPicker, itemFromFood, markUsed } from './library.js';
 import { itemTotals } from '../units.js';
 import { analyzeMeal, shrinkImage } from '../gemini.js';
 import { requestAdvice } from './advice.js';
 import { frequentMeals } from '../foods.js';
+import { closeFastsForMeal, reopenFastsForMeal } from '../fasting.js';
+import { fastInfo } from './fasting.js';
 
 const r1 = x => Math.round(x * 10) / 10;
 
@@ -28,6 +30,10 @@ export function openAddMeal(o = {}) {
 
   openSheet(sh => {
     sh.append(h('div.sheet-h', h('b', editing ? '編輯這一餐' : '記一餐'), h('button.link', { type: 'button', onclick: () => closeSheet() }, '關閉')));
+    // 斷食中：提醒存了這一餐就會結束斷食（拍照、辨識不會，按儲存才會）
+    if (!editing && fastInfo().fasting) sh.append(h('div.notice', { style: { margin: '0 0 12px' } },
+      h('div.small.one', { style: { fontWeight: 600 } }, '斷食中：存了這一餐，斷食就會結束'),
+      tip('拍照和辨識都不會影響斷食，按下儲存才會。只是想試試看的話，存了之後再刪掉這一餐，斷食會接回來。')));
 
     const inputArea = h('div');
     const tabs = h('div.seg');
@@ -197,9 +203,11 @@ export function openAddMeal(o = {}) {
         });
       });
       S.meals.sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : 0);
-      // 記了餐點，就結束進行中的手動斷食
-      for (const x of S.fasts || []) if (!x.end && x.start < at) x.end = at;
-      if (!editing) S.prefs.fastOverride = null; // 新的一餐：手動修改的斷食時間失效
+      // 記了餐點，就結束進行中的手動斷食（記下是這一餐結束的，刪掉這一餐時會接回來）
+      // 編輯：先接回被這一餐結束的斷食，再照新的時間重新判斷
+      if (editing) reopenFastsForMeal(S.fasts, group);
+      closeFastsForMeal(S.fasts, at, group);
+      // 手動修改的斷食時間不清掉：它只對改的時候的那一餐有效，記了新的一餐自動失效，刪掉這一餐又會恢復
       const ok = commit();
       closeSheet();
       if (ok) requestAdvice(group);
@@ -225,7 +233,9 @@ export function openAddMeal(o = {}) {
       const del = h('button.danger.full', { type: 'button' }, icon('trash'), ' 刪除這一餐');
       del.onclick = () => {
         if (!del.dataset.c) { del.dataset.c = 1; del.textContent = '再按一次確認刪除'; setTimeout(() => { del.dataset.c = ''; del.textContent = '刪除這一餐'; }, 3000); return; }
-        S.meals = S.meals.filter(m => m.group !== o.group); commit(); closeSheet(); toast('已刪除這一餐');
+        S.meals = S.meals.filter(m => m.group !== o.group);
+        const back = reopenFastsForMeal(S.fasts, o.group);
+        commit(); closeSheet(); toast(back ? '已刪除這一餐，斷食接回來了' : '已刪除這一餐');
       };
       sh.append(del);
       mode = 'library';

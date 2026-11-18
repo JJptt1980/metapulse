@@ -39,6 +39,30 @@ export function overrideValid(ov, lastGroup) {
   return !!ov && (ov.group || null) === (lastGroup || null) && (Number.isFinite(ov.start) || Number.isFinite(ov.end));
 }
 
+/**
+ * 記一餐：結束在這一餐之前開始、還在進行的手動斷食，並記下是哪一餐結束的（刪掉那一餐時才接得回來）
+ * 會直接改 fasts 裡的物件
+ */
+export function closeFastsForMeal(fasts, at, group) {
+  for (const x of fasts || []) if (x && x.start && !x.end && x.start < at) { x.end = at; x.endedBy = group; }
+}
+
+/**
+ * 刪掉（或改時間）一餐：被這一餐結束的斷食接回來。之後又開始了別的斷食的話不接，免得同時有兩個進行中
+ * @returns {number} 接回來幾筆
+ */
+export function reopenFastsForMeal(fasts, group) {
+  const list = (fasts || []).filter(x => x && x.start);
+  const latest = list.reduce((a, x) => (x.start > a ? x.start : a), '');
+  let n = 0;
+  for (const x of list) {
+    if (x.endedBy !== group) continue;
+    delete x.endedBy;
+    if (x.start === latest) { x.end = null; n++; }
+  }
+  return n;
+}
+
 /** 目前最後一餐的 group（存手動修改時用） */
 export function lastMealGroup(meals, now = Date.now()) {
   let lastAt = -Infinity, g = null;

@@ -166,7 +166,7 @@ export function fastingCard() {
     h('b.num', { style: { fontSize: '18px', color: 'var(--ac)', marginTop: '2px' } }, pct + '%'),
     h('span.mu.tiny', { style: { marginTop: '4px' } }, '已斷食 ' + clock(f.hours))]));
   body.append(h('div.mu.small', { style: { textAlign: 'center', marginTop: '6px' } },
-    dayLabel(f.start) + ' 開始 → ' + (over ? '預計時間是 ' : '預計 ') + dayLabel(e.end) + ((ov && (Number.isFinite(ov.start) || Number.isFinite(ov.end))) ? '（已手動修改）' : '')));
+    hm(f.start) + ' 開始 → ' + hm(e.end) + ' 結束' + ((ov && (Number.isFinite(ov.start) || Number.isFinite(ov.end))) ? '（已修改）' : '')));
   // 3. 身體現在的狀態
   body.append(h('div', { style: { marginTop: '6px', fontWeight: 650 } }, '身體現在：' + st.text),
     h('div.mu.tiny.one', st.nextAt != null ? '再 ' + dur(st.nextAt - f.hours) + ' 進入「' + FASTING.stages[st.index + 1].short + '」' + (Math.abs(f.start + st.nextAt * H - e.end) < 5 * 60000 ? '（剛好達標）' : '') : '已是最後階段'),
@@ -199,7 +199,7 @@ export function fastingCard() {
     tip('改過的時間最優先：經過時間、還剩多久、百分比、階段和提示文字都會照新的時間重新計算；記下一餐時自動回到從上一餐開始算。'),
     saveT,
     ov ? h('button.link.small', { type: 'button', onclick: () => { P.fastOverride = null; commit(); toast('已改回自動計算'); } }, '改回自動計算') : null)];
-  sec.append(fold('fast-time', h('span.small', h('b', '時間'), h('span.mu', '・' + dayLabel(f.start) + ' → ' + dayLabel(e.end) + (ov ? '（已手動修改）' : ''))), timeBody));
+  sec.append(fold('fast-time', h('span.small', h('b', '時間'), h('span.mu', '・' + hm(f.start) + ' → ' + hm(e.end) + (ov ? '（已修改）' : ''))), timeBody));
 
   const starts = stageStarts(shift);
   const list = h('div', { style: { marginTop: '6px' } });

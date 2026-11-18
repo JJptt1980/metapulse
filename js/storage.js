@@ -1,7 +1,7 @@
 /* 本機儲存。
  * - metapulse-v1：記錄資料，會列入 Drive 備份
  * - metapulse-local：只存在這台裝置（API key、主題、收合狀態…），不列入備份
- * 注意：同網域 killnopig.github.io 的 localStorage 是共用的，這裡只讀寫上面兩個鍵（與 -undo 等衍生鍵）。 */
+ * 注意：同網域（github.io 帳號網域）的 localStorage 是共用的，這裡只讀寫上面兩個鍵（與 -undo 等衍生鍵）。 */
 
 export const KEY = 'metapulse-v1';
 export const LOCAL_KEY = 'metapulse-local';

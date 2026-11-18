@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-MetaPulse is a pure-frontend personal tracker for food points (Gemini photo/text recognition), a 7-day rolling points pool, fasting, and dose/weight/BP records. No server, no bundler. It is deployed to GitHub Pages (https://killnopig.github.io/metapulse/) by pushing `main`. A Capacitor Android wrapper lives in a separate local project, `~/metapulse-app`, which loads the Pages URL (`server.url`) and adds native plugins: Health Connect, notifications, share, and filesystem.
+MetaPulse is a pure-frontend personal tracker for food points (Gemini photo/text recognition), a 7-day rolling points pool, fasting, and dose/weight/BP records. No server, no bundler. The source repo is `JJptt1980/metapulse` (git remote named origin; the GitHub account was renamed from killnopig). The app is served by GitHub Pages at https://killnopig.github.io/metapulse/ from a mirror repo in the new `killnopig` account (git remote named mirror), so the APK and everyone's on-device data keep the same origin. Deploy by pushing `main` to both remotes. A Capacitor Android wrapper lives in a separate local project, `~/metapulse-app`, which loads the Pages URL (`server.url`) and adds native plugins: Health Connect, notifications, share, and filesystem.
 
 The full product spec is `PROMPT.md`. It is gitignored and must never be committed. The repo is public, so never commit personal health data.
 
@@ -37,7 +37,8 @@ There is no build or lint step. Tests import the pure modules in `js/` directly.
 
 - The version lives in `index.html` as `window.APP_VERSION = 'x.y.z'`. Bump it on every deploy, then commit and push `main`.
 - The app polls for that regex and shows an "update available" prompt.
-- After pushing, poll the live site with curl until it serves the new `APP_VERSION`; only then is the deploy done.
+- Push to both remotes: `git push origin main && git push mirror main`. Never publish Releases on the mirror; Releases (and the FB post workflow) live only on `JJptt1980/metapulse`.
+- After pushing, poll https://killnopig.github.io/metapulse/ (what the APK loads) and https://jjptt1980.github.io/metapulse/ with curl until both serve the new `APP_VERSION`; only then is the deploy done.
 - `index.html` builds an import map that appends `?v=APP_VERSION` to every module. **Every new module must be added to the module list in `index.html`**, or it will be served from stale cache or fail to resolve.
 
 ## Architecture

@@ -19,6 +19,7 @@ const EXTERNAL = new Set([
   'Chronometer', 'versionCode', 'versionName', 'server.url',
   'dose-tracker-sync.json', 'dosetrack-v1-sync', 'maple_widget',
   'speechSynthesis', 'afconvert', 'generateContent', 'drive.appdata', 'metapulse.json',
+  'FB_PAGE_ID', 'FB_PAGE_TOKEN', 'MetaPulse.apk',
 ]);
 
 function walk(dir, out = []) {

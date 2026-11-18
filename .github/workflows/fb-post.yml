@@ -1,0 +1,77 @@
+# APK 正式版發布時，自動在 Facebook 粉絲專頁發文。
+# 條件：Release 發布、標籤 apk- 開頭、不是 pre-release。
+# 需要 repo Secrets：FB_PAGE_ID、FB_PAGE_TOKEN（長效專頁權杖，權限 pages_manage_posts）。
+# 也可以在 Actions 頁面手動執行：指定標籤，預設只印出貼文、不真的發。
+name: FB 發文（APK 正式版）
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release 標籤，例如 apk-1.0.0'
+        required: true
+        default: 'apk-1.0.0'
+      dry_run:
+        description: '只印出貼文，不真的發'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  post:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (startsWith(github.event.release.tag_name, 'apk-') && !github.event.release.prerelease)
+    runs-on: ubuntu-latest
+    steps:
+      - name: 讀取 Release 內容
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${{ github.repository }}/releases/tags/$TAG" > release.json
+          if [ "$(jq -r .prerelease release.json)" = "true" ]; then
+            echo "這是 pre-release，不發文。"; exit 1
+          fi
+
+      - name: 組貼文
+        run: |
+          set -euo pipefail
+          tag=$(jq -r .tag_name release.json)
+          ver=${tag#apk-}
+          body=$(jq -r '.body // ""' release.json)
+          {
+            echo "MetaPulse Android ${ver} 正式版上線了 🎉"
+            echo
+            if [ -n "$body" ]; then echo "$body"; echo; fi
+            echo "📥 下載與介紹：https://killnopig.github.io/metapulse/landing/"
+            case "$body" in
+              *不是醫療器材*) ;;
+              *) echo "MetaPulse 是個人記錄工具，點數與熱量皆為估算，不是醫療器材。" ;;
+            esac
+          } > message.txt
+          echo "----- 貼文內容 -----"
+          cat message.txt
+
+      - name: 發到粉絲專頁
+        if: github.event_name == 'release' || !inputs.dry_run
+        env:
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$FB_PAGE_ID" ] || [ -z "$FB_PAGE_TOKEN" ]; then
+            echo "缺少 FB_PAGE_ID 或 FB_PAGE_TOKEN Secrets。"; exit 1
+          fi
+          res=$(curl -sS -X POST "https://graph.facebook.com/${FB_PAGE_ID}/feed" \
+            --data-urlencode "message@message.txt" \
+            --data-urlencode "link=https://killnopig.github.io/metapulse/landing/" \
+            --data-urlencode "access_token=${FB_PAGE_TOKEN}")
+          echo "$res" | jq 'del(.access_token)' || echo "$res"
+          echo "$res" | jq -e .id > /dev/null || { echo "發文失敗。"; exit 1; }
+          echo "發文成功。"

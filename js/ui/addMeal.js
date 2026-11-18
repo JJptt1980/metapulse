@@ -6,6 +6,7 @@ import { foodPicker, itemFromFood, markUsed } from './library.js';
 import { itemTotals } from '../units.js';
 import { analyzeMeal, shrinkImage } from '../gemini.js';
 import { requestAdvice } from './advice.js';
+import { frequentMeals } from '../foods.js';
 
 const r1 = x => Math.round(x * 10) / 10;
 
@@ -104,7 +105,7 @@ export function openAddMeal(o = {}) {
           const f = ev.target.files && ev.target.files[0]; ev.target.value = '';
           if (!f) return;
           try {
-            const img = await shrinkImage(f);
+            const img = await shrinkImage(f, L.geminiFast !== false ? 512 : 768);   // 速度優先：照片小一點，上傳比較快
             lastImage = img;
             // 從相簿選的照片：用餐時間改成照片的時間（48 小時內、且不是剛拍的）
             const lm = +f.lastModified || 0, age = Date.now() - lm;
@@ -202,8 +203,19 @@ export function openAddMeal(o = {}) {
       toast(ok ? (editing ? '已更新這一餐' : '已加入，' + fmtPts(items.reduce((a, it) => a + itemTotals(it).points, 0)) + ' 點') : '儲存失敗：手機空間不夠', !ok);
     };
 
+    // 常吃：最常吃、最近吃的組合，點一下放進這一餐（不用 AI、不用網路）
+    const freq = editing ? [] : frequentMeals(S.meals);
+    const freqRow = freq.length ? h('div.pills', { style: { display: 'flex', gap: '6px', margin: '0 0 12px' } },
+      h('span.small.mu', { style: { alignSelf: 'center', flex: '0 0 auto' } }, '常吃'),
+      ...freq.map(f => h('button.ghost.small', { type: 'button', style: { maxWidth: '62vw' }, title: f.label, onclick: () => {
+        for (const m of f.items) items.push({ name: m.name, per: { ...m.per }, servingGrams: m.servingGrams, fistsPerServing: m.fistsPerServing,
+          unit: m.unit, qty: m.qty, slider: m.slider, source: m.source, foodId: m.foodId });
+        drawItems(); toast('已放進這一餐，按「加入這一餐」就記好了');
+        saveBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } }, f.label + '・' + fmtPts(f.points) + ' 點'))) : '';
+
     drawTabs();
-    sh.append(whenRow, tabs, inputArea, status, itemsBox,
+    sh.append(whenRow, freqRow, tabs, inputArea, status, itemsBox,
       h('button.link.small', { type: 'button', onclick: () => { items.push(blankItem()); drawItems(); itemsBox.lastChild?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }, icon('plus'), ' 自己輸入一項'),
       h('div.foot', saveBtn, totalTxt));
     if (editing) {

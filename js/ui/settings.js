@@ -195,7 +195,7 @@ function aiCard() {
     fold('ai-adv', h('span.small.mu', '進階設定'), [h('label', '連線方式（通常不用改）'), api]),
     test, out,
     h('a.small.one', { href: 'apikey.html', style: { display: 'block', marginTop: '12px', color: 'var(--ac)', fontWeight: 600 } }, '怎麼申請 API 金鑰（免費）›'),
-    tip('API 金鑰是使用 Google AI 的通行碼，像密碼一樣不要給別人。它只存在這支手機，不會放進存檔。照片和文字會直接從你的手機送到 Google 辨識。金鑰可以到 Google AI Studio 免費申請。測試連線會請 AI 估算「一顆水煮蛋」。')], !L.geminiKey);
+    tip('API 金鑰是使用 Google AI 的通行碼，像密碼一樣不要給別人。它只存在這支手機，不會放進存檔。照片和文字會直接從你的手機送到 Google 辨識。金鑰可以到 Google AI Studio 免費申請。測試連線會請 AI 估算「一顆水煮蛋」。「速度優先」會讓 AI 少想一點，照片也縮小成 512 像素再送出，回得比較快。')], !L.geminiKey);
 }
 
 /* ---------- 外觀與資料 ---------- */

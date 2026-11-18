@@ -26,3 +26,29 @@ export function findByName(lib, name) {
   const k = norm(name);
   return lib.find(f => norm(f.name) === k) || null;
 }
+
+/** 「常吃」：把以前的每一餐（同一個 group）依內容分組，最常吃、最近吃的排前面
+ *  同一組 = 食物名稱和份量都一樣。只看最近 60 天；回傳最多 n 組，每組附上最近那一次的品項 */
+export function frequentMeals(meals, now = Date.now(), n = 6) {
+  const since = now - 60 * 864e5, byGroup = new Map();
+  for (const m of meals || []) {
+    const t = Date.parse(m.at);
+    if (!m.group || !(t >= since) || t > now) continue;
+    if (!byGroup.has(m.group)) byGroup.set(m.group, []);
+    byGroup.get(m.group).push(m);
+  }
+  const sets = new Map();
+  for (const items of byGroup.values()) {
+    const key = items.map(m => norm(m.name) + '×' + (Math.round((+m.qty || 0) * 4) / 4) + (m.unit || '')).sort().join('|');
+    const t = Date.parse(items[0].at);
+    const s = sets.get(key) || { key, count: 0, last: 0, items };
+    s.count++;
+    if (t > s.last) { s.last = t; s.items = items; }
+    sets.set(key, s);
+  }
+  return [...sets.values()]
+    .map(s => ({ ...s, score: s.count + Math.max(0, 14 - (now - s.last) / 864e5) * 0.3,
+      label: s.items.map(m => m.name).join('＋'), points: s.items.reduce((a, m) => a + (+m.points || 0), 0) }))
+    .sort((a, b) => b.score - a.score || b.last - a.last)
+    .slice(0, n);
+}

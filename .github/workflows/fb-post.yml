@@ -63,6 +63,25 @@ jobs:
           echo "----- 附圖 -----"
           if [ -n "$img" ]; then echo "$img"; else echo "沒有 fb.png，改發文字加連結預覽"; fi
 
+      - name: 檢查權杖（只印出權杖屬於誰）
+        env:
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+        run: |
+          set -uo pipefail
+          if [ -z "$FB_PAGE_ID" ] || [ -z "$FB_PAGE_TOKEN" ]; then
+            echo "缺少 FB_PAGE_ID 或 FB_PAGE_TOKEN Secrets。"; exit 1
+          fi
+          me=$(curl -sS -G "https://graph.facebook.com/me" \
+            --data-urlencode "fields=id,name" \
+            --data-urlencode "access_token=${FB_PAGE_TOKEN}")
+          echo "權杖的主人：$(echo "$me" | jq -c '{id,name,error:.error.message}')"
+          echo "FB_PAGE_ID 長度：${#FB_PAGE_ID}，結尾：${FB_PAGE_ID: -4}"
+          if [ "$(echo "$me" | jq -r .id)" != "$FB_PAGE_ID" ]; then
+            echo "權杖不是這個專頁的專頁權杖（可能存成了使用者權杖，或 FB_PAGE_ID 填錯）。"; exit 1
+          fi
+          echo "權杖正確：是專頁權杖。"
+
       - name: 發到粉絲專頁
         if: github.event_name == 'release' || !inputs.dry_run
         env:

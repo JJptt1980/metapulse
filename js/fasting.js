@@ -63,6 +63,11 @@ export function reopenFastsForMeal(fasts, group) {
   return n;
 }
 
+/** 存這一餐會不會結束斷食：斷食中，而且用餐時間在斷食開始之後（補記更早的一餐不會） */
+export function mealEndsFast(fi, at) {
+  return !!(fi && fi.fasting && Number.isFinite(fi.start) && Number.isFinite(at) && at >= fi.start);
+}
+
 /** 目前最後一餐的 group（存手動修改時用） */
 export function lastMealGroup(meals, now = Date.now()) {
   let lastAt = -Infinity, g = null;

@@ -7,7 +7,7 @@ import { itemTotals } from '../units.js';
 import { analyzeMeal, shrinkImage } from '../gemini.js';
 import { requestAdvice } from './advice.js';
 import { frequentMeals } from '../foods.js';
-import { closeFastsForMeal, reopenFastsForMeal } from '../fasting.js';
+import { closeFastsForMeal, reopenFastsForMeal, mealEndsFast } from '../fasting.js';
 import { fastInfo } from './fasting.js';
 
 const r1 = x => Math.round(x * 10) / 10;
@@ -182,6 +182,7 @@ export function openAddMeal(o = {}) {
     function updateTotal() {
       const ts = items.map(itemTotals);
       const pts = ts.reduce((a, t) => a + t.points, 0), 大卡 = ts.reduce((a, t) => a + t.kcal, 0), pro = ts.reduce((a, t) => a + t.protein, 0);
+      saveBtn.dataset.c = ''; saveBtn.style.background = ''; saveBtn.style.color = '';   // 內容變了：取消「再按一次」
       saveBtn.disabled = !items.length;
       saveBtn.textContent = items.length ? (editing ? '儲存變更' : '加入這一餐') + '（' + fmtPts(pts) + ' 點）' : '先拍照、描述或選擇食物';
       totalTxt.textContent = items.length ? '本餐點數 ' + fmtPts(pts) + ' 點 · ' + Math.round(大卡) + ' 大卡 · 蛋白質 ' + r1(pro) + ' g' : '';
@@ -189,8 +190,16 @@ export function openAddMeal(o = {}) {
 
     saveBtn.onclick = () => {
       if (!items.length) return;
-      const group = editing ? o.group : uid('g');
       const at = (whenSet ? when : new Date()).toISOString();
+      // 斷食中：存了會結束斷食，要按兩次才存（跟刪除一樣）
+      if (!editing && !saveBtn.dataset.c && mealEndsFast(fastInfo(), new Date(at).getTime())) {
+        const old = saveBtn.textContent;
+        saveBtn.dataset.c = 1; saveBtn.textContent = '斷食會結束，再按一次儲存';
+        saveBtn.style.background = 'var(--warn)'; saveBtn.style.color = 'var(--act)';
+        setTimeout(() => { if (!saveBtn.dataset.c) return; saveBtn.dataset.c = ''; saveBtn.textContent = old; saveBtn.style.background = ''; saveBtn.style.color = ''; }, 3000);
+        return;
+      }
+      const group = editing ? o.group : uid('g');
       if (editing) S.meals = S.meals.filter(m => m.group !== o.group);
       items.forEach((it, i) => {
         const t = itemTotals(it);

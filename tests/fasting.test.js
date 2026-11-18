@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { currentFast, mealShift, stageAt, hourlyMessage, hybridSuggestion, eatingWindow, closeFastsForMeal, reopenFastsForMeal, overrideValid, lastMealGroup } from '../js/fasting.js';
+import { currentFast, mealShift, stageAt, hourlyMessage, hybridSuggestion, eatingWindow, closeFastsForMeal, reopenFastsForMeal, overrideValid, lastMealGroup, mealEndsFast } from '../js/fasting.js';
 import { longTermIndex, weightTrend, longTermMessage } from '../js/longterm.js';
 import { HOURLY_MESSAGES } from '../js/messages.js';
 import { addDays } from '../js/points.js';
@@ -168,4 +168,13 @@ test('刪掉一餐時，之後又開始了別的斷食就不接回舊的', () =>
   assert.equal(fasts[0].end, iso(3));
   assert.equal(fasts[0].endedBy, undefined);
   assert.equal(reopenFastsForMeal(fasts, 'gy'), 0);
+});
+
+test('存這一餐會不會結束斷食（要不要按兩次確認）', () => {
+  const fi = { fasting: true, start: t0 - 6 * H };
+  assert.equal(mealEndsFast(fi, t0), true);                         // 現在吃
+  assert.equal(mealEndsFast(fi, t0 - 6 * H), true);                 // 剛好在斷食開始時
+  assert.equal(mealEndsFast(fi, t0 - 7 * H), false);                // 補記斷食前的一餐
+  assert.equal(mealEndsFast({ fasting: false, start: t0 - 6 * H }, t0), false);   // 第 0 階段進食中
+  assert.equal(mealEndsFast({ fasting: false, reached: false }, t0), false);      // 沒有任何記錄
 });

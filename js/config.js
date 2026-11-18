@@ -49,7 +49,7 @@ export const FASTING = {
   bigMeal: { kcal: 800, carb: 100, shift: 1 },
   hugeMeal: { kcal: 1200, carb: 150, shift: 2 },
   barHours: 24,              // 進度條畫到幾小時
-  fastingFromHours: 4,       // 自由模式：距上一餐超過幾小時算「斷食中」（卡片展開）
+  fastingFromHours: 2,       // 自由模式：記完餐沒按「結束進餐」時，距上一餐幾小時後自動算「斷食中」（從上一餐開始算）
   plans: { '16:8': 16, '18:6': 18, '20:4': 20, '24H': 23 },
   freeTargets: [12, 14, 16, 18, 20],   // 自由斷食可選的目標時數
   freeTargetDefault: 16,  // 斷食時數；24H＝一天一餐（約 23 小時斷食＋1 小時進食）

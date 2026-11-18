@@ -3,7 +3,7 @@ import { S, L, commit, commitLocal, plan, uid } from '../state.js';
 import { h, fold, pills, toast, tip, info3, timePick } from './common.js';
 import { FASTING } from '../config.js';
 import { HOURLY_MESSAGES, OMAD_DONE } from '../messages.js';
-import { fuelText } from '../lines.js';
+import { fuelText, eatingTip, eatingText } from '../lines.js';
 import { currentFast, fastEnd, lastMealGroup, mealShift, stageAt, stageStarts, hourlyMessage, hybridSuggestion, eatingWindow, hm, dur } from '../fasting.js';
 import { openAddMeal } from './addMeal.js';
 import { timeStop, gears } from './fx.js';
@@ -156,9 +156,16 @@ export function fastingCard() {
   const pct = Math.round(e.pct);
   const fasting = (ov && Number.isFinite(ov.start)) || f.manual || (win ? !win.inWindow : f.hours >= FASTING.fastingFromHours);
   const shortStage = FASTING.stages[st.index].short || st.text.split('，')[0];
-  const summary = (over ? '已超過 ' + dur(-e.left) : '還剩 ' + dur(e.left)) + '（' + pct + '%）・' + shortStage;
+  const eatLine = win && win.inWindow ? '進食窗口到 ' + hm(win.closesAt) : '上一餐 ' + hm(f.start) + '・已經 ' + dur(f.hours);
+  const summary = !fasting ? eatLine : (over ? '已超過 ' + dur(-e.left) : '還剩 ' + dur(e.left)) + '（' + pct + '%）・' + shortStage;
 
   const body = h('div', { style: { marginTop: '10px' } });
+  if (!fasting) {
+    // 第 0 階段「進食中」：還沒按「結束進餐」，不倒數、不顯示百分比和階段
+    body.append(h('div.small.one', { style: { fontWeight: 600 } }, eatingTip(now, f.start)),   // 每 2 分鐘換一句（今日頁每分鐘重畫）
+      h('div', { style: { margin: '12px 0 4px', color: 'var(--ac)', fontWeight: 650, fontSize: '17px', lineHeight: 1.6 } }, eatingText(now, f.start)),
+      tip('記完餐後是第 0 階段「進食中」。吃完按「結束進餐，開始斷食」，斷食就從按的那一刻開始算；忘了按的話，距上一餐 ' + FASTING.fastingFromHours + ' 小時後會自動從上一餐開始算。'));
+  } else {
   // 1. 斷食環：中間是還剩多久與百分比
   const totalH = (e.end - f.start) / H;
   body.append(fastRing(f.hours, totalH, shift, st.index, [
@@ -176,6 +183,7 @@ export function fastingCard() {
   // 4. 心靈雞湯
   body.append(h('div', { style: { margin: '14px 0 4px', color: 'var(--ac)', fontWeight: 650, fontSize: '17px', lineHeight: 1.6 } }, hourlyMessage(f.hours, f.start, HOURLY_MESSAGES)));
   if (mode === 'STRICT_MANUAL' && (P.strictPlan || '16:8') === '24H' && f.hours >= FASTING.plans['24H']) body.append(h('div.notice.ok', { style: { marginTop: '8px' } }, OMAD_DONE[0]));
+  }
   // 5. 主要按鈕
   body.append(fasting ? endFastBtn(f) : startBtn());
 
@@ -201,17 +209,21 @@ export function fastingCard() {
     tip('改過的時間最優先：經過時間、還剩多久、百分比、階段和提示文字都會照新的時間重新計算；記下一餐時自動回到從上一餐開始算。'),
     saveT,
     ov ? h('button.link.small', { type: 'button', onclick: () => { P.fastOverride = null; commit(); toast('已改回自動計算'); } }, '改回自動計算') : null)];
-  sec.append(fold('fast-time', h('span.small', h('b', '時間'), h('span.mu', '・' + hm(f.start) + ' → ' + hm(e.end) + (ov ? '（已修改）' : ''))), timeBody));
+  if (fasting) sec.append(fold('fast-time', h('span.small', h('b', '時間'), h('span.mu', '・' + hm(f.start) + ' → ' + hm(e.end) + (ov ? '（已修改）' : ''))), timeBody));
 
   const starts = stageStarts(shift);
-  const list = h('div', { style: { marginTop: '6px' } });
+  // 一個表格排齊：時間那一欄不換行
+  const list = h('div.small', { style: { marginTop: '6px', display: 'grid', gridTemplateColumns: '16px max-content 1fr', gap: '6px 8px' } });
+  const row = (mark, range, text, cur, done) => {
+    const st0 = { color: cur ? 'var(--tx)' : 'var(--mu)', fontWeight: cur ? 650 : 400, opacity: done ? 0.6 : 1 };
+    list.append(h('span', { style: { ...st0, color: 'var(--ac)' } }, mark), h('span.num', { style: { ...st0, whiteSpace: 'nowrap' } }, range), h('span', { style: st0 }, text));
+  };
+  row(!fasting ? '▶' : '✓', '進食中', '按「結束進餐」前（第 0 階段）', !fasting, fasting);
   FASTING.stages.forEach((sg, i) => {
-    const cur = i === st.index, done = i < st.index;
-    const range = starts[i] + (starts[i + 1] != null ? '–' + starts[i + 1] : '+') + ' 小時';
-    list.append(h('div.small', { style: { display: 'grid', gridTemplateColumns: '16px 76px 1fr', gap: '6px', padding: '3px 0', color: cur ? 'var(--tx)' : 'var(--mu)', fontWeight: cur ? 650 : 400, opacity: done ? 0.6 : 1 } },
-      h('span', { style: { color: 'var(--ac)' } }, cur ? '▶' : done ? '✓' : ''), h('span.num', range), h('span', sg.text)));
+    const cur = fasting && i === st.index, done = fasting && i < st.index;
+    row(cur ? '▶' : done ? '✓' : '', starts[i] + (starts[i + 1] != null ? '–' + starts[i + 1] : '+') + ' 小時', sg.text, cur, done);
   });
-  sec.append(fold('fast-stages', h('span.small', h('b', '全部階段'), h('span.mu', '・現在第 ' + (st.index + 1) + ' 階段')), [list]));
+  sec.append(fold('fast-stages', h('span.small', h('b', '全部階段'), h('span.mu', '・現在第 ' + (fasting ? st.index + 1 : 0) + ' 階段')), [list]));
 
   const pickMode = v => { P.fastMode = v; L.collapsed['fast-mode'] = 0; commit(); };
   const modeBody = [h('div', { style: { marginTop: '8px' } }, pills(MODES, mode, pickMode))];
@@ -238,8 +250,8 @@ export function fastingCard() {
   body.append(sec);
 
   // 斷食中而且還沒達標：一直展開；其他時候收成一行（使用者自己開合的照舊記住）
-  const force = fasting && !over;
-  card.append(fold('fast-card', h('div.grow', h('h2', { style: { margin: 0 } }, fasting ? '斷食中' : '斷食'), h('div.small.num', { style: { marginTop: '2px' } }, summary)), [body], { open: false, force }));
+  const force = !fasting || !over;
+  card.append(fold('fast-card', h('div.grow', h('h2', { style: { margin: 0 } }, fasting ? '斷食中' : '進食中・第 0 階段'), h('div.small.num', { style: { marginTop: '2px' } }, summary)), [body], { open: false, force }));
   return card;
 }
 

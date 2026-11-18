@@ -49,6 +49,13 @@ export const EATING = {
   tails: ['蛋白質是你最可靠的隊友！', '吃飽就停是高手的節奏！', '吃完記得按「結束進餐」！', '下一場比賽等你開打！', '細嚼慢嚥最強！', '多吃點菜和蛋白質！', '補滿能量再出發！', '身體會謝謝你！', '享受這一餐吧！', '吃得穩比吃得快重要！'],
 };
 
+/** 第 0 階段「進食中」的建議（只提醒、不下指令；12 × 10 = 120） */
+export const EATING_TIPS = {
+  emoji: '🍽️',
+  heads: ['先吃菜和蛋白質', '飯麵可以放到最後', '細嚼慢嚥', '吃到八分飽就可以停', '配一杯水或無糖茶', '放下手機專心吃', '每一口多嚼幾下', '這一餐記得有蛋白質', '多夾一份青菜', '慢慢吃大約 20 分鐘', '飽的感覺會晚一點才到', '留意身體說「夠了」'],
+  tails: ['讓飽足感跟上來', '吃得更舒服', '給腸胃一點時間', '這一餐更有滿足感', '身體會謝謝你', '節奏剛剛好', '下一段會更輕鬆', '好好享受這一餐', '慢慢來就很好', '你在照顧自己'],
+};
+
 /* ---------- 排順序 ---------- */
 function rng(seed) { // mulberry32
   let a = seed >>> 0;
@@ -84,6 +91,12 @@ export function soupText(now, fastStart) {
   let gi = 0; SOUP.forEach((g, i) => { if (hrs >= g.from) gi = i; });
   const g = SOUP[gi], k = Math.floor(Math.max(0, now - (fastStart + g.from * 3600000)) / STEP);
   return comboAt(g.heads, g.tails, k, daySeed(fastStart) * 10 + 5 + gi);
+}
+
+/** 進食中的建議（從上一餐開始算，每 2 分鐘換一句） */
+export function eatingTip(now, mealStart) {
+  const k = Math.floor(Math.max(0, now - mealStart) / STEP);
+  return EATING_TIPS.emoji + ' ' + comboAt(EATING_TIPS.heads, EATING_TIPS.tails, k, daySeed(mealStart) * 10 + 8);
 }
 
 /** 進食中的雞湯（從上一餐開始算） */

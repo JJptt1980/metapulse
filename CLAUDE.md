@@ -71,7 +71,7 @@ There is no build or lint step. Tests import the pure modules in `js/` directly.
 **UI** (`js/ui/*`):
 - Hand-built DOM with `h()` from `ui/common.js`, which also provides `fold`, `section`, `openSheet`, `toast`, and `kvTable`.
 - `app.js` wires the four bottom tabs (飲食運動 = `today.js`, 身體 = `log.js`, 圖表 = `charts.js`, 設定 = `settings.js`) and re-renders on state changes.
-- `ui/fx.js` effects are all original: CSS, SVG gears, Web Audio, and `speechSynthesis`. Don't add copyrighted audio or images. (Whether `assets/zawarudo.m4a` is original has not been confirmed with the user — ask before changing or relying on it.)
+- `ui/fx.js` effects are all original: CSS, SVG gears, Web Audio, and `speechSynthesis`. Don't add copyrighted audio or images. (`assets/zawarudo.m4a` is original: generated with macOS `say -v "Grandpa (中文（台灣）)"` and `afconvert`, so it may stay.)
 - Chart.js is lazy-loaded from cdnjs in `ui/charts.js`.
 
 ## Hard constraints

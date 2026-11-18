@@ -1,6 +1,7 @@
 # APK 正式版發布時，自動在 Facebook 粉絲專頁發文。
 # 條件：Release 發布、標籤 apk- 開頭、不是 pre-release。
 # 需要 repo Secrets：FB_PAGE_ID、FB_PAGE_TOKEN（長效專頁權杖，權限 pages_manage_posts）。
+# Release 附件有 fb.png（GB子 說明圖）就發圖片貼文，沒有就發文字加連結預覽。
 # 也可以在 Actions 頁面手動執行：指定標籤，預設只印出貼文、不真的發。
 name: FB 發文（APK 正式版）
 
@@ -55,8 +56,12 @@ jobs:
               *) echo "MetaPulse 是個人記錄工具，點數與熱量皆為估算，不是醫療器材。" ;;
             esac
           } > message.txt
+          img=$(jq -r '[.assets[] | select(.name == "fb.png")][0].browser_download_url // ""' release.json)
+          echo "$img" > image_url.txt
           echo "----- 貼文內容 -----"
           cat message.txt
+          echo "----- 附圖 -----"
+          if [ -n "$img" ]; then echo "$img"; else echo "沒有 fb.png，改發文字加連結預覽"; fi
 
       - name: 發到粉絲專頁
         if: github.event_name == 'release' || !inputs.dry_run
@@ -68,10 +73,18 @@ jobs:
           if [ -z "$FB_PAGE_ID" ] || [ -z "$FB_PAGE_TOKEN" ]; then
             echo "缺少 FB_PAGE_ID 或 FB_PAGE_TOKEN Secrets。"; exit 1
           fi
-          res=$(curl -sS -X POST "https://graph.facebook.com/${FB_PAGE_ID}/feed" \
-            --data-urlencode "message@message.txt" \
-            --data-urlencode "link=https://killnopig.github.io/metapulse/landing/" \
-            --data-urlencode "access_token=${FB_PAGE_TOKEN}")
+          img=$(cat image_url.txt)
+          if [ -n "$img" ]; then
+            res=$(curl -sS -X POST "https://graph.facebook.com/${FB_PAGE_ID}/photos" \
+              --data-urlencode "url=${img}" \
+              --data-urlencode "caption@message.txt" \
+              --data-urlencode "access_token=${FB_PAGE_TOKEN}")
+          else
+            res=$(curl -sS -X POST "https://graph.facebook.com/${FB_PAGE_ID}/feed" \
+              --data-urlencode "message@message.txt" \
+              --data-urlencode "link=https://killnopig.github.io/metapulse/landing/" \
+              --data-urlencode "access_token=${FB_PAGE_TOKEN}")
+          fi
           echo "$res" | jq 'del(.access_token)' || echo "$res"
           echo "$res" | jq -e .id > /dev/null || { echo "發文失敗。"; exit 1; }
           echo "發文成功。"

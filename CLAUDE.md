@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-MetaPulse is a pure-frontend personal tracker for food points (Gemini photo/text recognition), a 7-day rolling points pool, fasting, and dose/weight/BP records. No server, no bundler. The source repo is `JJptt1980/metapulse` (git remote named origin; the GitHub account was renamed from killnopig). The app is served by GitHub Pages at https://killnopig.github.io/metapulse/ from a mirror repo in the new `killnopig` account (git remote named mirror), so the APK and everyone's on-device data keep the same origin. Deploy by pushing `main` to both remotes. A Capacitor Android wrapper lives in a separate local project, `~/metapulse-app`, which loads the Pages URL (`server.url`) and adds native plugins: Health Connect, notifications, share, and filesystem.
+MetaPulse is a pure-frontend personal tracker for food points (Gemini photo/text recognition), a 7-day rolling points pool, fasting, and dose/weight/BP records. No server, no bundler. The source repo is `JJptt1980/metapulse` (git remote named origin; the GitHub account was renamed from killnopig). The app is served by GitHub Pages at https://killnopig.github.io/metapulse/, so the APK and everyone's on-device data keep the same origin. The repo name `killnopig/metapulse` is retired by GitHub and cannot be created, so the site lives in the `metapulse/` folder of the user-site repo `killnopig/killnopig.github.io` (owned by the new placeholder `killnopig` account). `.github/workflows/mirror-pages.yml` copies every push to `main` there automatically, using the secret `KILLNOPIG_PAGES_TOKEN`. Deploy by pushing `main` to origin only. A Capacitor Android wrapper lives in a separate local project, `~/metapulse-app`, which loads the Pages URL (`server.url`) and adds native plugins: Health Connect, notifications, share, and filesystem.
 
 The full product spec is `PROMPT.md`. It is gitignored and must never be committed. The repo is public, so never commit personal health data.
 
@@ -37,8 +37,9 @@ There is no build or lint step. Tests import the pure modules in `js/` directly.
 
 - The version lives in `index.html` as `window.APP_VERSION = 'x.y.z'`. Bump it on every deploy, then commit and push `main`.
 - The app polls for that regex and shows an "update available" prompt.
-- Push to both remotes: `git push origin main && git push mirror main`. Never publish Releases on the mirror; Releases (and the FB post workflow) live only on `JJptt1980/metapulse`.
-- After pushing, poll https://killnopig.github.io/metapulse/ (what the APK loads) and https://jjptt1980.github.io/metapulse/ with curl until both serve the new `APP_VERSION`; only then is the deploy done.
+- Push only to origin: `git push origin main`. The "Mirror to killnopig.github.io/metapulse" workflow then copies the site to the killnopig user-site repo. Never commit to `killnopig/killnopig.github.io` by hand; Releases (and the FB post workflow) live only on `JJptt1980/metapulse`.
+- After pushing, check that the mirror workflow succeeded (`gh run list -R JJptt1980/metapulse -w mirror-pages.yml -L 1`), then poll https://killnopig.github.io/metapulse/ (what the APK loads) and https://jjptt1980.github.io/metapulse/ with curl until both serve the new `APP_VERSION`; only then is the deploy done.
+- `KILLNOPIG_PAGES_TOKEN` is a fine-grained token of the `killnopig` account (only `killnopig/killnopig.github.io`, Contents read/write) and expires within a year. If the mirror workflow fails with an auth error, ask the user to make a new token and update the secret.
 - `index.html` builds an import map that appends `?v=APP_VERSION` to every module. **Every new module must be added to the module list in `index.html`**, or it will be served from stale cache or fail to resolve.
 
 ## Architecture

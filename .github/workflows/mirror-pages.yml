@@ -1,0 +1,57 @@
+name: Mirror to killnopig.github.io/metapulse
+
+# The APK (com.killnopig.metapulse) and everyone's on-device data live on the
+# origin https://killnopig.github.io. The repo name killnopig/metapulse is
+# retired by GitHub, so the site is mirrored into the metapulse/ folder of the
+# killnopig/killnopig.github.io user-site repo instead.
+#
+# Secret KILLNOPIG_PAGES_TOKEN: fine-grained token of the killnopig account,
+# repository access limited to killnopig/killnopig.github.io, Contents: read and write.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mirror-pages
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout metapulse
+        uses: actions/checkout@v4
+        with:
+          path: src
+
+      - name: Checkout killnopig.github.io
+        uses: actions/checkout@v4
+        with:
+          repository: killnopig/killnopig.github.io
+          token: ${{ secrets.KILLNOPIG_PAGES_TOKEN }}
+          path: site
+
+      - name: Copy site into metapulse/
+        run: |
+          mkdir -p site/metapulse
+          rsync -a --delete --exclude '.git' --exclude '.github' src/ site/metapulse/
+
+      - name: Commit and push
+        working-directory: site
+        env:
+          SRC_SHA: ${{ github.sha }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to mirror."
+            exit 0
+          fi
+          git commit -m "Mirror metapulse ${SRC_SHA::7}"
+          git push

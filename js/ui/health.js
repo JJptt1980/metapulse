@@ -12,13 +12,13 @@ export function healthCard() {
   const native = isNative() && !!healthPlugin();
   const drawSum = () => {
     const x = L.lastHC;
-    sumEl.textContent = !native ? '只能在 Maple app 使用'
+    sumEl.textContent = !native ? '只能在 MetaPulse app 使用'
       : x ? '上次同步：' + new Date(x.at).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) + '・新增 ' + x.added + ' 筆' : '還沒同步過';
   };
   drawSum();
   if (!native) {
     return section('hc', 'Health Connect 同步', sumEl, [
-      tip('Health Connect 是 Android 手機內建的「健康資料中心」，Omron、手錶等 app 會把量到的資料放在這裡。只有安裝在手機上的 app 才能讀取，網頁版讀不到。安裝 Maple 的 APK（Android 安裝檔）後，從主畫面的 Maple 圖示打開，這裡會出現同步按鈕，可以讀取血壓、脈搏、體重、體脂、基礎代謝和運動消耗的熱量。'),
+      tip('Health Connect 是 Android 手機內建的「健康資料中心」，Omron、手錶等 app 會把量到的資料放在這裡。只有安裝在手機上的 app 才能讀取，網頁版讀不到。安裝 MetaPulse 的 APK（Android 安裝檔）後，從主畫面的 MetaPulse 圖示打開，這裡會出現同步按鈕，可以讀取血壓、脈搏、體重、體脂、基礎代謝和運動消耗的熱量。'),
       /Android/i.test(navigator.userAgent || '') ? h('div.mu.tiny', { style: { marginTop: '6px' } }, '診斷：' + diagnose()) : null,
     ]);
   }

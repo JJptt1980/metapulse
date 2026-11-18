@@ -11,7 +11,7 @@
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <script>
 /* 版本號：發布新版時改這裡。版本檢查會比對線上 index.html 的這一行。 */
-window.APP_VERSION = '0.9.13';
+window.APP_VERSION = '0.9.14';
 /* 載入失敗時不要只剩空白：記下錯誤，8 秒後程式還沒啟動就顯示原因與「重新載入」 */
 (function(){var errs=[];
 addEventListener('error',function(e){var t=e.target;if(t&&t!==window&&(t.src||t.href))errs.push('載入失敗：'+(t.src||t.href).split('/').slice(-2).join('/'));else errs.push((e.message||'程式檔載入失敗（網路或舊快取）')+(e.filename?'（'+e.filename.split('/').pop().split('?')[0]+':'+e.lineno+'）':''))},true);
@@ -22,7 +22,7 @@ d.innerHTML='<b>程式沒有載入成功</b><div style="font-size:13px;margin:6p
 d.children[1].textContent=(errs.length?errs.slice(0,5).join('；'):'沒有收到錯誤訊息（可能是網路太慢或舊的快取）')+'。版本 '+window.APP_VERSION+'，'+navigator.userAgent.replace(/^.*?\(/,'(').slice(0,80);
 var b=document.createElement('button');b.textContent='重新載入（略過舊快取）';b.style.cssText='width:100%;padding:12px;border:0;border-radius:10px;font-weight:700;font-size:15px';
 b.onclick=function(){location.replace(location.pathname+'?r='+Date.now())};d.appendChild(b);document.body.appendChild(d)},8000)})();
-/* 在 Maple app（APK）裡：Android 會讓畫面延伸到狀態列底下，上方要留空間 */
+/* 在 MetaPulse app（APK）裡：Android 會讓畫面延伸到狀態列底下，上方要留空間 */
 try{if(window.Capacitor&&(window.Capacitor.isNativePlatform?window.Capacitor.isNativePlatform():window.Capacitor.getPlatform&&window.Capacitor.getPlatform()!=='web'))document.documentElement.classList.add('native')}catch(e){}
 /* 主題先套用，避免閃一下 */
 try{var _l=JSON.parse(localStorage.getItem('metapulse-local')||'{}');var _t=_l.theme==='auto'&&!_l.themeChosen?'light':(_l.theme||'light');if(_t==='light'||_t==='dark')document.documentElement.setAttribute('data-theme',_t);if(+_l.fontScale>0&&+_l.fontScale!==1)document.documentElement.style.zoom=_l.fontScale}catch(e){}
@@ -140,7 +140,7 @@ nav.tabs button[hidden]{display:none}
 .modal.on{display:flex}
 .modal .card{max-width:480px;max-height:90vh;overflow:auto;margin:0}
 .legal p{margin:0 0 8px}
-/* Maple app：狀態列與手勢列不要蓋到內容 */
+/* MetaPulse app：狀態列與手勢列不要蓋到內容 */
 .native body{padding-top:max(env(safe-area-inset-top,0px),32px)}
 .native body::before{content:"";position:fixed;top:0;left:0;right:0;height:max(env(safe-area-inset-top,0px),32px);background:#141917;z-index:45;pointer-events:none}
 .native nav.tabs{padding-bottom:max(env(safe-area-inset-bottom,0px),12px)}

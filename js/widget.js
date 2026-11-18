@@ -1,4 +1,4 @@
-/* 桌面小工具（只有 Maple app）：把斷食開始、預計結束、各階段時間與熱血雞湯交給原生小工具
+/* 桌面小工具（只有 MetaPulse app）：把斷食開始、預計結束、各階段時間與熱血雞湯交給原生小工具
  * 原生端（MapleWidget 外掛）存進 SharedPreferences，小工具自己倒數，不必開 app */
 import { S } from './state.js';
 import { capPlugin } from './health.js';

@@ -99,7 +99,7 @@ export function applyHealth(S, plan, uid) {
 /** 實際向 Health Connect 讀取 */
 export async function readHealth(days) {
   const H = healthPlugin();
-  if (!H) throw new Error('這個功能只能在 Maple 手機 app（APK）裡使用。');
+  if (!H) throw new Error('這個功能只能在 MetaPulse 手機 app（APK）裡使用。');
   const av = await H.isAvailable();
   if (!av || !av.available) throw new Error('這支手機不能使用 Health Connect：' + ((av && av.reason) || '沒有安裝或不支援'));
   const types = ['weight', 'bodyFat', 'bloodPressure', 'basalCalories', 'heartRate', 'calories'];

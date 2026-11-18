@@ -148,7 +148,7 @@ export async function readSyncBackup() {
   return { data, modifiedTime: f.modifiedTime ? new Date(f.modifiedTime).getTime() : 0 };
 }
 
-/** 只讀取 Maple 自己在雲端的存檔（檢查最新日期用；找不到回傳 null） */
+/** 只讀取 MetaPulse 自己在雲端的存檔（檢查最新日期用；找不到回傳 null） */
 export async function readOwnRemote() {
   if (!ready()) throw new Error('請先連線 Google Drive');
   const f = await findFile(FN);

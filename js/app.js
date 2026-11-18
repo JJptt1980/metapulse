@@ -48,8 +48,8 @@ onChange(ev => {
   if (tab === 'chart') renderCharts($('p-chart'));
   if (tab === 'set' && ev && ev.replaced) renderSettings($('p-set'));
   if (!ev || !ev.remote) askBackupSoon();
-  scheduleSoon();                       // 服藥、注射通知（只有 Maple app）
-  updateWidgetSoon();                   // 桌面小工具（只有 Maple app）
+  scheduleSoon();                       // 服藥、注射通知（只有 MetaPulse app）
+  updateWidgetSoon();                   // 桌面小工具（只有 MetaPulse app）
 });
 
 /* ---------- Google Drive 狀態列、提示 ---------- */

@@ -23,5 +23,5 @@ export function soundSettings() {
     }
   };
   draw();
-  return h('div', box, tip('可以換成你自己的音效檔（mp3、m4a 等，2 MB 以內）。檔案只存在這台裝置，不會上傳、也不會放進 Google Drive 備份；Chrome 和 Maple app 要各選一次。沒有設定時用內建聲音。特效會等音效播完才接下一段。'));
+  return h('div', box, tip('可以換成你自己的音效檔（mp3、m4a 等，2 MB 以內）。檔案只存在這台裝置，不會上傳、也不會放進 Google Drive 備份；Chrome 和 MetaPulse app 要各選一次。沒有設定時用內建聲音。特效會等音效播完才接下一段。'));
 }

@@ -1,6 +1,6 @@
 {
   "name": "MetaPulse — 飲食、斷食與用藥記錄",
-  "short_name": "Maple",
+  "short_name": "MetaPulse",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

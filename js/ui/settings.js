@@ -43,7 +43,7 @@ export const GLOSSARY = [
   ['存檔／備份', '把全部記錄另外存一份，換手機或資料不見時可以拿回來。'],
   ['Google Drive', 'Google 的雲端硬碟。MetaPulse 只用裡面一個看不到的專用資料夾放存檔，別人看不到。'],
   ['Health Connect', 'Android 手機內建的「健康資料中心」，Omron、手錶等 app 會把量到的資料放在這裡。'],
-  ['APK', 'Android app 的安裝檔。Maple 就是 MetaPulse 的手機 app 版。'],
+  ['APK', 'Android app 的安裝檔，也就是 MetaPulse 的手機 app 版。'],
   ['API 金鑰', '使用 Google AI 的通行碼（API key），像密碼一樣，不要給別人。'],
   ['AI 模型', 'Google 提供的不同 AI 版本，有的比較快、有的比較準。'],
 ];

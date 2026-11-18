@@ -4,9 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-MetaPulse ("Maple") is a pure-frontend personal tracker for food points (Gemini photo/text recognition), a 7-day rolling points pool, fasting, and dose/weight/BP records. No server, no bundler. It is deployed to GitHub Pages (https://killnopig.github.io/metapulse/) by pushing `main`. A Capacitor Android wrapper lives in a separate local project, `~/metapulse-app`, which loads the Pages URL (`server.url`) and adds native plugins: Health Connect, notifications, share, and filesystem.
+MetaPulse is a pure-frontend personal tracker for food points (Gemini photo/text recognition), a 7-day rolling points pool, fasting, and dose/weight/BP records. No server, no bundler. It is deployed to GitHub Pages (https://killnopig.github.io/metapulse/) by pushing `main`. A Capacitor Android wrapper lives in a separate local project, `~/metapulse-app`, which loads the Pages URL (`server.url`) and adds native plugins: Health Connect, notifications, share, and filesystem.
 
 The full product spec is `PROMPT.md`. It is gitignored and must never be committed. The repo is public, so never commit personal health data.
+
+## Naming
+
+The app's user-facing name is **MetaPulse** everywhere (UI text, APK label, guide, privacy page). "Maple" is only an internal short form: the `MapleWidget` plugin, the `maple_widget` prefs, and the terminal widget's `$ maple fast` line.
 
 ## Working with the user
 
@@ -93,4 +97,6 @@ export JAVA_HOME=~/Library/Java/JavaVirtualMachines/jbr-21.0.11/Contents/Home &&
 
 Web-only changes need no rebuild, because the APK loads the Pages URL. Bump `versionCode` / `versionName` in `android/app/build.gradle` for each new APK.
 
-Home-screen widgets: `FastingWidget` (normal) and `FastingTermWidget` (terminal style) share `FastingWidget.compute()`, which reads the JSON the web wrote through `MapleWidgetPlugin` into SharedPreferences `maple_widget`. The countdown runs on a system `Chronometer`; everything else is recomputed only on app updates or about every 30 minutes. Terminal bar symbols come from the web (`termBar`), so changing them needs no APK rebuild. Health Connect permissions are declared in `android/app/src/main/AndroidManifest.xml`.
+Release signing: the keystore and `keystore.properties` live in `~/metapulse-app/release/` (gitignored; the user must back them up). `./gradlew assembleRelease` signs with it when the file exists. Moving a phone from the debug APK to the release APK requires uninstalling first (different signature).
+
+Home-screen widgets: `FastingWidget` (normal), `FastingTermWidget` (terminal style, 4×2) and `FastingSmallWidget` (terminal, labelled 3×2) share `FastingWidget.compute()`, which reads the JSON the web wrote through `MapleWidgetPlugin` into SharedPreferences `maple_widget`. The countdown runs on a system `Chronometer`; everything else is recomputed only on app updates or about every 30 minutes. Terminal bar symbols come from the web (`termBar`), so changing them needs no APK rebuild. Health Connect permissions are declared in `android/app/src/main/AndroidManifest.xml`.

@@ -1,4 +1,4 @@
-/* 設定頁「危險區」：清除這支手機上的 Maple 資料，回到預設值
+/* 設定頁「危險區」：清除這支手機上的 MetaPulse 資料，回到預設值
  * - 只刪 metapulse-v1、metapulse-local、metapulse-v1-undo 三個本機儲存鍵
  * - 雲端（Google Drive）絕對不動：清除前只忘記這支手機的登入（不撤銷授權、不讀寫雲端檔案），之後也不會自動備份
  * - 同步版、Health Connect 的資料都不會動 */
@@ -53,7 +53,7 @@ function overlay(food = false) {
       h('div', { style: box },
         h('b', '會刪除：'),
         h('ul', { style: { paddingLeft: '20px', margin: '6px 0' } }, li('餐點 ' + n.m + ' 道（' + groups + ' 餐）'), li('斷食記錄 ' + n.x + ' 筆')),
-        h('b', linked() ? '⚠️ 已連線 Google Drive：雲端存檔，以及之後同步的 Maple app，也會一起刪掉。' : '還沒連線 Google Drive：只刪這支手機。'),
+        h('b', linked() ? '⚠️ 已連線 Google Drive：雲端存檔，以及之後同步的 MetaPulse app，也會一起刪掉。' : '還沒連線 Google Drive：只刪這支手機。'),
         h('div', { style: { marginTop: '8px' } }, h('b', '不會動：'), '體重、血壓、注射、體組成、常用食物、個人資料和設定。')),
       bkBtn, bk,
       h('div', { style: { fontSize: '16px', fontWeight: 700, marginTop: '18px' } }, '確定要清除，請輸入「' + WORD + '」：'),
@@ -72,7 +72,7 @@ function overlay(food = false) {
         li('個人資料、AI 的 API 金鑰、所有設定')),
       h('b', '不會動：'),
       h('ul', { style: { paddingLeft: '20px', margin: '6px 0 0' } },
-        li('Google Drive 雲端的 Maple 存檔：會先中斷連線，雲端那份完全不會被改動或刪除。之後重新連線同一個帳號，記錄會再合併回來。'),
+        li('Google Drive 雲端的 MetaPulse 存檔：會先中斷連線，雲端那份完全不會被改動或刪除。之後重新連線同一個帳號，記錄會再合併回來。'),
         li('同步版、Health Connect 裡的資料。'))),
     bkBtn, bk,
     h('div', { style: { fontSize: '16px', fontWeight: 700, marginTop: '18px' } }, '確定要清除，請輸入「' + WORD + '」：'),

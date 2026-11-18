@@ -1,4 +1,4 @@
-/* 手機通知（只在 Maple app 裡有；網頁版只顯示卡片）
+/* 手機通知（只在 MetaPulse app 裡有；網頁版只顯示卡片）
  * - 服藥：每天固定時間（S.prefs.meds）
  * - 注射：下次注射日早上（L.notify.doseRemindAt，預設 09:00）
  * - 斷食：階段轉換與達標（或每小時），勿擾時段不發（L.notify.freq／quietStart／quietEnd）
@@ -38,9 +38,9 @@ export async function notifyStatus() {
 export async function openExactSetting() { const P = plugin(); if (P && P.changeExactNotificationSetting) await P.changeExactNotificationSetting(); }
 /** 10 秒後跳一則測試通知 */
 export async function testNotify() {
-  const P = plugin(); if (!P) throw new Error('網頁版不會發通知，請在 Maple app 裡試');
-  if (!(await allowed(P))) throw new Error('手機沒有允許 Maple 發通知');
-  await P.schedule({ notifications: [{ id: 7199, title: 'Maple 測試通知', body: '看到這則就代表通知正常。', schedule: { at: new Date(Date.now() + 10000), allowWhileIdle: true } }] });
+  const P = plugin(); if (!P) throw new Error('網頁版不會發通知，請在 MetaPulse app 裡試');
+  if (!(await allowed(P))) throw new Error('手機沒有允許 MetaPulse 發通知');
+  await P.schedule({ notifications: [{ id: 7199, title: 'MetaPulse 測試通知', body: '看到這則就代表通知正常。', schedule: { at: new Date(Date.now() + 10000), allowWhileIdle: true } }] });
 }
 
 let timer = null, scheduled = true;   // scheduled：上次有排通知（沒有東西要排時也要先取消舊的）
@@ -62,13 +62,13 @@ export async function schedule() {
   try { await P.cancel({ notifications: ids }); } catch (e) { /* 第一次沒有可取消的 */ }
   const list = meds.slice(0, 50).map((m, i) => {
     const [hh, mm] = m.time.split(':').map(Number);
-    return { id: MED_BASE + i, title: '該吃藥了：' + m.name, body: m.time + ' 的藥，吃完到 Maple 按「已服用」。', schedule: { on: { hour: hh, minute: mm }, allowWhileIdle: true } };
+    return { id: MED_BASE + i, title: '該吃藥了：' + m.name, body: m.time + ' 的藥，吃完到 MetaPulse 按「已服用」。', schedule: { on: { hour: hh, minute: mm }, allowWhileIdle: true } };
   });
   if (nd && nd.left >= 0) {
     const [hh, mm] = (L.notify && L.notify.doseRemindAt || '09:00').split(':').map(Number);
     const [y, mo, d] = nd.due.split('-').map(Number);
     const at = new Date(y, mo - 1, d, hh, mm);
-    if (at > new Date()) list.push({ id: DOSE_ID, title: '今天要注射', body: '建議部位：' + nd.site + '。打完到 Maple 記錄。', schedule: { at, allowWhileIdle: true } });
+    if (at > new Date()) list.push({ id: DOSE_ID, title: '今天要注射', body: '建議部位：' + nd.site + '。打完到 MetaPulse 記錄。', schedule: { at, allowWhileIdle: true } });
   }
   fn.forEach((x, i) => {
     const h0 = Math.round(x.hours);

@@ -142,7 +142,7 @@ export function medsSettings() {
     const st = await notifyStatus().catch(() => ({ web: true }));
     actions.textContent = '';
     if (st.web) { msg.style.color = 'var(--mu)'; msg.textContent = '這是網頁版，不會發通知（只會在飲食頁顯示服藥卡）'; return; }
-    const bad = st.display === 'denied' ? '手機沒有允許 Maple 發通知' : st.exact === 'denied' ? '沒有開啟「準時鬧鐘」，通知可能延後或不會跳' : '';
+    const bad = st.display === 'denied' ? '手機沒有允許 MetaPulse 發通知' : st.exact === 'denied' ? '沒有開啟「準時鬧鐘」，通知可能延後或不會跳' : '';
     msg.style.color = bad ? 'var(--warn)' : 'var(--ac)';
     msg.textContent = bad || ('✓ 通知正常・已排好 ' + st.pending + ' 個');
     const test = h('button.ghost', { type: 'button', style: { padding: '8px' } }, '測試通知（10 秒後）');
@@ -164,7 +164,7 @@ export function medsSettings() {
   };
   const add = h('button.ghost.full', { type: 'button' }, '＋ 新增藥物');
   add.onclick = () => { meds().push({ id: uid('rx'), name: '降血糖藥', time: '19:00', since: localDate(new Date()) }); commit(); draw(); resched(); };
-  // 斷食與注射通知（只有 Maple app 會發）
+  // 斷食與注射通知（只有 MetaPulse app 會發）
   const N = (L.notify = L.notify || {});
   const saveN = () => { commitLocal(); resched(); };
   const freq = h('select', h('option', { value: 'phase' }, '階段轉換和達標時（建議）'), h('option', { value: 'hourly' }, '每小時'), h('option', { value: 'off' }, '不通知'));
@@ -177,5 +177,5 @@ export function medsSettings() {
     h('label', '注射日提醒時間'), timePick(N.doseRemindAt || '09:00', v => { N.doseRemindAt = v; saveN(); }));
   draw(); drawSum(); drawStatus();
   return section('meds', '提醒與通知', sumEl, [list, add, msg, actions, notifyBox,
-    tip('到了吃藥時間，「飲食運動」頁最上面會出現服藥卡（往下捲也會貼在頂端），吃完按「已服用」。服藥卡下面的「服藥記錄」是月曆，每一天都可以點開修改。在 Maple app 裡，時間到會跳手機通知（第一次會問你要不要允許通知）；網頁版不會通知，只會顯示卡片。斷食通知：在每個斷食階段開始和達標時通知（或每小時一次），「晚上不打擾」時段內不發。注射日當天在設定的時間提醒一次。這只是提醒，吃藥的方式請照醫師或藥師的指示。')]);
+    tip('到了吃藥時間，「飲食運動」頁最上面會出現服藥卡（往下捲也會貼在頂端），吃完按「已服用」。服藥卡下面的「服藥記錄」是月曆，每一天都可以點開修改。在 MetaPulse app 裡，時間到會跳手機通知（第一次會問你要不要允許通知）；網頁版不會通知，只會顯示卡片。斷食通知：在每個斷食階段開始和達標時通知（或每小時一次），「晚上不打擾」時段內不發。注射日當天在設定的時間提醒一次。這只是提醒，吃藥的方式請照醫師或藥師的指示。')]);
 }

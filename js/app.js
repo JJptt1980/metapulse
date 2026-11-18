@@ -1,6 +1,6 @@
 /* 啟動：分頁切換、各畫面串接、版本檢查 */
 import { onChange } from './state.js';
-import { $, closeSheet, sheetOpen } from './ui/common.js';
+import { $, closeSheet, sheetOpen, backLayer } from './ui/common.js';
 import { renderToday } from './ui/today.js';
 import { onAdviceState } from './ui/advice.js';
 import { renderSettings, showDisclaimerOnce, applyTheme } from './ui/settings.js';
@@ -41,11 +41,22 @@ function show(t) {
 }
 document.querySelectorAll('nav.tabs button').forEach(b => { b.onclick = () => { if (sheetOpen()) closeSheet(); show(b.dataset.t); }; });
 
+/* Android 返回手勢：一層一層退（收區塊、關面板 → 回「飲食運動」→ 2 秒內再滑一次才離開）
+ * 回傳 true 表示網頁處理掉了；false 時 App 才關掉 */
+let lastBack = 0;
+window.__mpBack = () => {
+  if (backLayer()) return true;
+  if (tab !== 'today') { show('today'); return true; }
+  if (Date.now() - lastBack < 2000) return false;
+  lastBack = Date.now(); toast('再滑一次就離開');
+  return true;
+};
+
 /* 資料變動時只重畫「今日」，設定頁不重畫（避免打字時失去焦點） */
 onChange(ev => {
   renderToday($('p-today'));
   if (tab === 'log') renderLog($('p-log'));
-  if (tab === 'chart') renderCharts($('p-chart'));
+  if (tab === 'chart') renderCharts($('p-chart'), true);   // 同步進來的新資料：重畫但不跳回最上面
   if (tab === 'set' && ev && ev.replaced) renderSettings($('p-set'));
   if (!ev || !ev.remote) askBackupSoon();
   scheduleSoon();                       // 服藥、注射通知（只有 MetaPulse app）

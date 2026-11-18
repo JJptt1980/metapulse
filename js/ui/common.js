@@ -78,8 +78,30 @@ export function fold(key, summary, body, { open = false, force = false, cls = ''
   const d = h('details' + (cls ? '.' + cls : ''));
   d.open = force || (st === undefined ? open : st === 1);
   d.append(h('summary', summary), ...[].concat(body));
-  d.ontoggle = () => { L.collapsed[key] = d.open ? 1 : 0; commitLocal(); };
+  d.ontoggle = () => {
+    L.collapsed[key] = d.open ? 1 : 0; commitLocal();
+    const i = openStack.indexOf(d); if (i >= 0) openStack.splice(i, 1);
+    if (d.open && d.dataset.ready) openStack.push(d);   // 使用者自己打開的才記（返回手勢一層一層收起）
+  };
+  setTimeout(() => { d.dataset.ready = 1; }, 0);         // 畫面剛建好時的預設展開不算
   return d;
+}
+
+/* 返回手勢（Android App）：每滑一次退一層
+ * 面板裡自己打開的區塊 → 面板 → 頁面裡自己打開的區塊；都沒有就回傳 false（交給 app.js 決定回第一頁或離開） */
+const openStack = [];
+export function backLayer() {
+  const sh = $('sheet'), inSheet = sheetOpen();
+  for (let i = openStack.length - 1; i >= 0; i--) {
+    const d = openStack[i];
+    if (!d.isConnected || !d.open || d.offsetParent === null) { openStack.splice(i, 1); continue; }
+    if (inSheet !== sh.contains(d)) continue;
+    d.open = false;
+    d.querySelector('summary')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    return true;
+  }
+  if (inSheet) { closeSheet(); return true; }
+  return false;
 }
 
 /** 設定頁用的區塊：收合時只顯示標題與一行摘要 sumEl（由呼叫端更新文字） */

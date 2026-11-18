@@ -66,7 +66,12 @@ export function chartSpecs(pal, range = 'all', bpv = 'all') {
   const bm = es.filter(e => e.bage > 0 || e.bmr > 0);
   const H = +S.profile.height || 0, TW = +S.profile.targetWeight || 0, HL = +S.profile.halfLife || 120;
   const grid = () => ({ color: ln }), tk = () => ({ maxTicksLimit: 7 });
-  const leg = () => ({ labels: { color: tx, boxWidth: 12 } });
+  // 圖例：虛線的那幾條畫成一小段虛線（粗框虛線的小方塊會變成鋸齒狀），實線的畫成小方塊
+  const leg = () => ({ labels: { color: tx, boxWidth: 12, usePointStyle: true, pointStyleWidth: 18,
+    generateLabels: chart => Chart.defaults.plugins.legend.labels.generateLabels(chart).map(it => {
+      const ds = chart.data.datasets[it.datasetIndex] || {}, dashed = ds.borderDash && ds.borderDash.length;
+      return Object.assign(it, dashed ? { pointStyle: 'line', lineDash: [4, 3], lineWidth: 3 } : { pointStyle: 'rect', lineDash: [] });
+    }) } });
   const ln3 = (label, data, color, extra) => Object.assign({ label, data, borderColor: color, backgroundColor: color, tension: 0.25, pointRadius: data.length > 80 ? 1.5 : 3, spanGaps: true }, extra || {});
   // 橫軸照實際天數排：從第一天到最後一天每天一格，沒量的日子留空（線直接連過去）
   const span = ds0 => { if (!ds0.length) return []; const o = []; for (let i = dn(ds0[0]); i <= dn(ds0[ds0.length - 1]); i++) o.push(fromDn(i)); return o; };
@@ -401,13 +406,22 @@ function aiCard(range, bpv) {
 let live = [];
 const OPEN_DEFAULT = { w: true };
 
-export async function renderCharts(root) {
+/** keep = 按選項重畫：畫面停在原來的位置（重畫時頁面會暫時變短，瀏覽器會捲回最上面） */
+export async function renderCharts(root, keep = false) {
+  if (!keep) return drawCharts(root);
+  const y = window.scrollY;
+  root.style.minHeight = root.offsetHeight + 'px';
+  try { await drawCharts(root); }
+  finally { window.scrollTo(0, y); requestAnimationFrame(() => { root.style.minHeight = ''; window.scrollTo(0, y); }); }
+}
+
+async function drawCharts(root) {
   live.forEach(c => c && c.destroy()); live = [];
   root.textContent = '';
   const any = S.entries.some(e => e.wt > 0 || e.dose > 0 || e.sys > 0 || e.fat > 0 || e.mus > 0 || e.vis > 0 || e.bage > 0 || e.bmr > 0);
   if (!any) { root.append(h('div.card', h('div.empty', '還沒有可以畫圖的資料。到「身體」新增，或到「設定」→「備份與匯入」把同步版的記錄搬過來。'))); root.append(longTermStatusCard()); return; }
   const range = L.chartRange || 'all', bpv = L.chartBp || 'all';
-  root.append(h('div.card', h('div.row.between', h('b.small', '範圍'), pills([['30', '近 30 天'], ['90', '近 90 天'], ['all', '全部']], range, v => { L.chartRange = v; commitLocal(); renderCharts(root); })),
+  root.append(h('div.card', h('div.row.between', h('b.small', '範圍'), pills([['30', '近 30 天'], ['90', '近 90 天'], ['all', '全部']], range, v => { L.chartRange = v; commitLocal(); renderCharts(root, true); })),
     ));
   const wait = h('div.card', h('div.row.small.mu', h('span.spin'), '正在準備圖表…'));
   root.append(wait);
@@ -424,7 +438,7 @@ export async function renderCharts(root) {
     addHover(sp, pal);
     const cv = h('canvas', { style: { touchAction: 'pan-y' } });
     const body = [];
-    if (sp.id === 'bp') body.push(h('div', { style: { margin: '10px 0 4px' } }, pills([['all', '全部量測'], ['day', '每日平均'], ['ampm', '早／晚分開']], bpv, v => { L.chartBp = v; commitLocal(); renderCharts(root); })));
+    if (sp.id === 'bp') body.push(h('div', { style: { margin: '10px 0 4px' } }, pills([['all', '全部'], ['day', '每日'], ['ampm', '早晚']], bpv, v => { L.chartBp = v; commitLocal(); renderCharts(root, true); })));
     const cvs = (sp.parts || [{ cfg: sp.cfg }]).map((pt, i) => {
       const c0 = i === 0 && !sp.parts ? cv : h('canvas', { style: { touchAction: 'pan-y' } });
       if (sp.parts) body.push(h('div.small', { style: { marginTop: '10px', fontWeight: 650 } }, pt.title));

@@ -1,0 +1,74 @@
+# 手動在 JJptt 粉專發一篇自訂貼文（例如代 JJptt 發更新文）。只能在 Actions 頁面或 gh workflow run 手動執行。
+# 需要 repo Secrets：FB_PAGE_ID、FB_PAGE_TOKEN（同 fb-post.yml）。
+name: FB 自訂發文（手動）
+
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: '貼文全文'
+        required: true
+      image_url:
+        description: '附圖的公開網址（留空就只發文字）'
+        required: false
+        default: ''
+      dry_run:
+        description: '只印出貼文，不真的發'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 準備貼文
+        env:
+          MSG: ${{ inputs.message }}
+          IMG: ${{ inputs.image_url }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$MSG" > message.txt
+          echo "----- 貼文內容 -----"; cat message.txt
+          echo "----- 附圖 -----"; echo "${IMG:-（沒有）}"
+          if [ -n "$IMG" ]; then
+            code=$(curl -sSL -o /dev/null -w '%{http_code}' "$IMG")
+            echo "附圖網址狀態：$code"; [ "$code" = "200" ] || { echo "附圖網址打不開。"; exit 1; }
+          fi
+
+      - name: 檢查權杖（只印出權杖屬於誰）
+        env:
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+        run: |
+          set -uo pipefail
+          me=$(curl -sS -G "https://graph.facebook.com/me" --data-urlencode "fields=id,name" --data-urlencode "access_token=${FB_PAGE_TOKEN}")
+          echo "權杖的主人：$(echo "$me" | jq -c '{name,error:.error.message}')"
+          [ "$(echo "$me" | jq -r .id)" = "$FB_PAGE_ID" ] || { echo "權杖不是 FB_PAGE_ID 這個專頁的專頁權杖。"; exit 1; }
+          echo "權杖正確。"
+
+      - name: 發到粉絲專頁
+        if: ${{ !inputs.dry_run }}
+        env:
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_PAGE_TOKEN: ${{ secrets.FB_PAGE_TOKEN }}
+          IMG: ${{ inputs.image_url }}
+        run: |
+          set -euo pipefail
+          if [ -n "$IMG" ]; then
+            res=$(curl -sS -X POST "https://graph.facebook.com/${FB_PAGE_ID}/photos" \
+              --data-urlencode "url=${IMG}" --data-urlencode "caption@message.txt" \
+              --data-urlencode "access_token=${FB_PAGE_TOKEN}")
+          else
+            res=$(curl -sS -X POST "https://graph.facebook.com/${FB_PAGE_ID}/feed" \
+              --data-urlencode "message@message.txt" --data-urlencode "access_token=${FB_PAGE_TOKEN}")
+          fi
+          echo "$res" | jq .
+          pid=$(echo "$res" | jq -r '.post_id // .id // empty')
+          [ -n "$pid" ] || { echo "發文失敗。"; exit 1; }
+          echo "發文成功。確認貼文："
+          curl -sS -G "https://graph.facebook.com/${pid}" \
+            --data-urlencode "fields=permalink_url,created_time,full_picture,is_published" \
+            --data-urlencode "access_token=${FB_PAGE_TOKEN}" | jq '{permalink_url,created_time,is_published,has_picture:(.full_picture != null)}'

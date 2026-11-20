@@ -50,7 +50,7 @@ jobs:
             echo "MetaPulse Android ${ver} 正式版上線了 🎉"
             echo
             if [ -n "$body" ]; then echo "$body"; echo; fi
-            echo "📥 下載與介紹：https://killnopig.github.io/metapulse/landing/"
+            echo "📥 下載與介紹：https://jjptt1980.github.io/metapulse/landing/"
             case "$body" in
               *不是醫療器材*) ;;
               *) echo "MetaPulse 是個人記錄工具，點數與熱量皆為估算，不是醫療器材。" ;;
@@ -101,7 +101,7 @@ jobs:
           else
             res=$(curl -sS -X POST "https://graph.facebook.com/${FB_PAGE_ID}/feed" \
               --data-urlencode "message@message.txt" \
-              --data-urlencode "link=https://killnopig.github.io/metapulse/landing/" \
+              --data-urlencode "link=https://jjptt1980.github.io/metapulse/landing/" \
               --data-urlencode "access_token=${FB_PAGE_TOKEN}")
           fi
           echo "$res" | jq 'del(.access_token)' || echo "$res"
